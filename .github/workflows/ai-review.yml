@@ -1,0 +1,64 @@
+name: AI 审核 PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 生成代码变更 diff
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1 || true
+          git diff origin/${{ github.base_ref }}...HEAD > /tmp/pr.diff || true
+          # 限制大小避免超出模型上下文
+          head -c 60000 /tmp/pr.diff > /tmp/pr_trimmed.diff
+
+      - name: 调用 AI 审查
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+        run: |
+          if [ -z "$AI_API_KEY" ]; then
+            echo "> ⚠️ 未配置 AI_API_KEY / AI_BASE_URL / AI_MODEL 仓库密钥，跳过 AI 审查。" > /tmp/review.md
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json, os, urllib.request
+          diff = open('/tmp/pr_trimmed.diff', encoding='utf-8', errors='ignore').read()
+          base = (os.environ.get('AI_BASE_URL') or 'https://api.deepseek.com').rstrip('/')
+          model = os.environ.get('AI_MODEL') or 'deepseek-chat'
+          payload = {
+            "model": model,
+            "messages": [
+              {"role": "system", "content": "你是资深代码审查员。用中文审查代码变更，重点关注：安全漏洞、逻辑错误、明显的性能问题。按严重程度列出问题（严重/建议/次要），没有问题时简短说明改动合理。不要复述代码。"},
+              {"role": "user", "content": "请审查以下 PR 代码变更：\n\n" + diff}
+            ],
+            "temperature": 0.2,
+            "max_tokens": 2000
+          }
+          req = urllib.request.Request(base + '/chat/completions', data=json.dumps(payload).encode(), headers={
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + os.environ['AI_API_KEY']
+          })
+          with urllib.request.urlopen(req, timeout=240) as r:
+              d = json.loads(r.read().decode())
+          review = d['choices'][0]['message']['content']
+          open('/tmp/review.md', 'w', encoding='utf-8').write(review)
+          PY
+
+      - name: 评论到 PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/review.md || true
