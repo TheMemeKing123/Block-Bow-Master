@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+kv_db.json
+kv_db_new.json
+*.log

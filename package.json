@@ -1,0 +1,13 @@
+{
+  "name": "bow-master-cf",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "node scripts/sync-version.mjs && wrangler deploy",
+    "sync": "node scripts/sync-version.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
