@@ -1392,7 +1392,7 @@ function bindInput(){
     P.downId = null;
     if(G.drawing){
       G.drawing = false;
-      if(G.draw < 0.15) G.draw = 0.75;   // 轻点一下：默认力度快射
+      if(G.draw < 0.15) G.draw = 0.3;    // 轻点一下：低力度快射(蓄满可射更远, 拉开力度差异)
       releaseArrow();
       G.draw = 0;
     }
@@ -1699,19 +1699,27 @@ function loop(){
   for(const sname in G.steves){
     const s = G.steves[sname];
     const pp = G.foePose[sname];
+    const prevX = s.group.position.x, prevZ = s.group.position.z;
     if(pp && pp.x !== undefined){ s.group.position.x += (pp.x - s.group.position.x)*0.25; s.group.position.z += (pp.z - s.group.position.z)*0.25; s.group.position.y = 0; }
     s.group.rotation.y = (Math.PI + ((pp && pp.yaw) || 0));
     const d = (pp && pp.draw) || 0;
+    const mv = Math.hypot(s.group.position.x - prevX, s.group.position.z - prevZ);
+    s.walkPhase = (s.walkPhase || 0) + mv * 4.5;
+    const moving = mv > 0.008;
+    const swing = moving ? Math.sin(s.walkPhase) * 0.55 : Math.sin(t*2.2)*0.08;
     const idle = Math.sin(t*2.2)*0.12;
     if(d > 0.05){   // 拉弓：双臂水平前伸
       s.armL.rotation.x += ((-Math.PI/2 - 0.15*d) - s.armL.rotation.x)*0.3;
       s.armR.rotation.x += ((-Math.PI/2 + 0.1) - s.armR.rotation.x)*0.3;
+    } else if(moving){   // 走路: 手臂前后摆
+      s.armL.rotation.x += ((swing*0.6) - s.armL.rotation.x)*0.2;
+      s.armR.rotation.x += ((-swing*0.6) - s.armR.rotation.x)*0.2;
     } else {
       s.armL.rotation.x += (idle - s.armL.rotation.x)*0.15;
       s.armR.rotation.x += (-idle - s.armR.rotation.x)*0.15;
     }
-    s.legL.rotation.x = Math.sin(t*2.2)*0.08;
-    s.legR.rotation.x = -Math.sin(t*2.2)*0.08;
+    s.legL.rotation.x = moving ? swing : Math.sin(t*2.2)*0.08;
+    s.legR.rotation.x = moving ? -swing : -Math.sin(t*2.2)*0.08;
     s.head.rotation.y = ((pp && pp.yaw) || 0);
   }
 

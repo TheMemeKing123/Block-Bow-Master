@@ -179,8 +179,9 @@ export default {
       if (!me.isDeveloper) return json({ error: '无权' }, 403);
       const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
       const nm = url.searchParams.get('name') || me.name;
-      const r = await stub.fetch('https://do/user-check?name=' + encodeURIComponent(nm));
-      return new Response(await r.text(), { status: r.status, headers: { 'Content-Type': 'application/json' } });
+      const which = url.searchParams.get('dump') || '';
+      const rr = which ? await stub.fetch('https://do/' + which) : await stub.fetch('https://do/user-check?name=' + encodeURIComponent(nm));
+      return new Response(await rr.text(), { status: rr.status, headers: { 'Content-Type': 'application/json' } });
     }
     if (path === '/api/dbdbg' && request.method === 'GET') {
       if (!me.isDeveloper) return json({ error: '无权' }, 403);
