@@ -1,6 +1,6 @@
 /* RoomDO: 全局唯一 Durable Object，承载所有房间 + 在线名单
    使用 hibernation API（免费额度友好） */
-import { userFromToken, ADMIN_NAME, ADMIN_DEFAULT_PASS } from './auth.js';
+import { userFromToken, ADMIN_NAME, ADMIN_DEFAULT_PASS, nameToId } from './auth.js';
 const b64u = (buf) => { let s=''; const b=new Uint8Array(buf); for (const c of b) s+=String.fromCharCode(c); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
 
 export class RoomDO {
@@ -20,8 +20,7 @@ export class RoomDO {
     /* S3 备份优先(每次变更都会存, 是最新状态), KV 只是兜底(分数等可能陈旧) */
     try { if (!this.db) this.db = JSON.parse((await this.s3GetObj('bow-db.json')) || 'null'); } catch (e) {}
     try { if (!this.db || !Object.keys(this.db).length) this.db = JSON.parse((await this.env.BOW_KV.get('db')) || 'null'); } catch (e) {}
-    try { if (!this.secret) this.secret = await this.env.BOW_KV.get('secret'); } catch (e) {}
-    if (!this.secret) { try { this.secret = (await this.s3GetObj('bow-secret')) || null; } catch (e) {} }
+    if (!this.secret) this.secret = await this.sha256((this.env.SECRET_PEPPER || 'bow-fallback-v2') + '|bow-master|v1');
     if (!this.secret) { try { this.secret = (await this.s3GetObj('bow-secret')) || null; } catch (e) {} }
     if (this.db) for (const k of Object.keys(this.db)) { if (this.db[k].arrows === undefined) this.db[k].arrows = 100; }
     if (!this.db || !Object.keys(this.db).length) {
@@ -34,7 +33,6 @@ export class RoomDO {
     }
     if (!this.secret) this.secret = b64u(crypto.getRandomValues(new Uint8Array(32)).buffer);
     try { await this.env.BOW_KV.put('db', JSON.stringify(this.db)); } catch (e) {}
-    try { await this.env.BOW_KV.put('secret', this.secret); } catch (e) {}
     this.s3ScheduleSave();
   }
 
@@ -113,6 +111,38 @@ export class RoomDO {
       const n = String(url.searchParams.get('name') || '').slice(0, 16);
       const u = this.db[n];
       return new Response(JSON.stringify({ score: u ? (u.score|0) : null, arrows: u ? (u.arrows|0) : null }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.pathname === '/user-check') {
+      await this.ensure();
+      const want = String(url.searchParams.get('userId') || '');
+      const byName = String(url.searchParams.get('name') || '');
+      for (const [name, u] of Object.entries(this.db)) {
+        if ((byName && name === byName) || (want && (await nameToId(name)) === want)) {
+          return new Response(JSON.stringify({ name, user: u }), { headers: { 'Content-Type': 'application/json' } });
+        }
+      }
+      return new Response(JSON.stringify({}), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.pathname === '/user-exists') {
+      await this.ensure();
+      const n = String(url.searchParams.get('name') || '').slice(0, 16);
+      return new Response(JSON.stringify({ exists: !!this.db[n] }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.pathname === '/user-create' && request.method === 'POST') {
+      await this.ensure();
+      const b = await request.json();
+      const name = String(b.name || '').slice(0, 16);
+      if (!name) return new Response(JSON.stringify({ error: '无用户名' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      if (this.db[name]) return new Response(JSON.stringify({ ok: true, already: true }), { headers: { 'Content-Type': 'application/json' } });
+      this.db[name] = {
+        salt: String(b.salt || ''), pass: String(b.pass || ''),
+        score: b.score|0, arrows: (b.arrows === undefined ? 100 : (b.arrows|0)),
+        banned: false, isAdmin: false, isDeveloper: false,
+        reg: b.reg || Date.now(), lastLogin: b.lastLogin || 0,
+      };
+      try { await this.env.BOW_KV.put('db', JSON.stringify(this.db)); } catch (e) {}
+      this.s3ScheduleSave();
+      return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/gift' && request.method === 'POST') {
       await this.ensure();

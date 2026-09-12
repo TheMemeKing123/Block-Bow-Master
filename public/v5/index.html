@@ -559,7 +559,7 @@ function getScore(name){ const u = USER_CACHE[name]; return u ? (u.score||0) : 0
 function addScore(name, d){
   if (AUTH.user && AUTH.user.username === name){
     AUTH.user.score = Math.max(0, (AUTH.user.score||0) + d);
-    if (USER_CACHE[name]) USER_CACHE[name].score = AUTH.user.score;
+    USER_CACHE[name] = USER_CACHE[name] || {}; USER_CACHE[name].score = AUTH.user.score;
     if (curScreen === 'screen-lobby') $('lob-score').textContent = AUTH.user.score;
   }
   let sx = 0, sz = 0;
@@ -1500,7 +1500,8 @@ function exitGame(){
   $('wait-overlay').classList.remove('show');
   $('pause-overlay').classList.remove('show');
   show('screen-lobby');
-  const s = getSession(); if(s){ $('lob-score').textContent = getScore(s); }
+  if (AUTH.user) { $('lob-score').textContent = (AUTH.user.score|0); }
+  updateArrowUI();
   G = null;
 }
 

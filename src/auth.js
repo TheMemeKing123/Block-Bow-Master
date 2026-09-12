@@ -15,6 +15,7 @@ const hex = (buf) => [...new Uint8Array(buf)].map((c) => c.toString(16).padStart
 const bytesFromHex = (h) => new Uint8Array(h.match(/../g).map((b) => parseInt(b, 16)));
 
 async function sha1Hex(s) { return hex(await crypto.subtle.digest('SHA-1', enc.encode(s))); }
+async function sha256Hex(s) { return hex(await crypto.subtle.digest('SHA-256', enc.encode(s))); }
 async function nameToId(name) { return 'u' + (await sha1Hex('bow:' + name)).slice(0, 15); }
 async function hmacSign(secret, msg) {
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -45,11 +46,8 @@ async function putDb(env, d) {
   return true;
 }
 async function getSecret(env) {
-  try { const s = await env.BOW_KV.get('secret'); if (s) return s; } catch (e) {}
-  try { const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
-    const r = await stub.fetch('https://do/secret');
-    if (r.ok) { const s = await r.text(); try { await env.BOW_KV.put('secret', s); } catch (e) {} return s; } } catch (e) {}
-  return 'fallback-secret-' + (env.BOW_FALLBACK || 'v1');
+  /* 确定性密钥: 由 SECRET_PEPPER 推导, Worker 与 DO 各自本地计算, 永远一致(不再经 KV 分发) */
+  return await sha1Hex((env.SECRET_PEPPER || 'bow-fallback-v2') + '|bow-master|v1') + sha256Hex((env.SECRET_PEPPER || 'bow-fallback-v2') + '|bow-master|v1');
 }
 async function issueToken(env, name) {
   const sec = await getSecret(env);
@@ -71,13 +69,21 @@ async function userFromToken(env, token) {
     const p = JSON.parse(dec.decode(bytesFromB64u(head)));
     if (!p.userId || !p.exp || p.exp < Date.now()) { console.log('[auth] bad payload'); return null; }
     const db = await getDb(env);
-    console.log('[auth] db keys=', Object.keys(db).length, 'want userId=', p.userId);
     for (const [name, u] of Object.entries(db)) {
       if (await nameToId(name) === p.userId) {
         if (u.banned) return null;
         return { name, ...u };
       }
     }
+    /* KV 副本可能滞后: 新注册账号回源 DO 查询(DO 在注册时会同步收到的用户) */
+    try {
+      const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+      const r = await stub.fetch('https://do/user-check?userId=' + encodeURIComponent(p.userId));
+      if (r.ok) {
+        const d = await r.json();
+        if (d.name && d.user && !d.user.banned) return { name: d.name, ...d.user };
+      }
+    } catch (e) {}
     console.log('[auth] userId not found in db');
     return null;
   } catch (e) { return null; }
@@ -93,5 +99,5 @@ function pubUser(u) {
 export {
   ADMIN_NAME, ADMIN_DEFAULT_PASS, TOKEN_TTL,
   b64u, hex, hashPass, getDb, putDb, getSecret, hmacSign,
-  issueToken, userFromToken, pubUser,
+  issueToken, userFromToken, pubUser, nameToId,
 };

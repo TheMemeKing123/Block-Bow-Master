@@ -72,10 +72,26 @@ export default {
       if (name.length > 16) return json({ error: '姓名最长 16 字' }, 400);
       if (pass.length < 6) return json({ error: '密码至少 6 位' }, 400);
       const db = await getDb(env);
-      if (db[name]) return json({ error: '这个账号已经被注册过了' }, 400);
+      let dupInDO = false;
+      try {
+        const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+        const rr = await stub.fetch('https://do/user-exists?name=' + encodeURIComponent(name));
+        if (rr.ok) { const d = await rr.json(); dupInDO = !!d.exists; }
+      } catch (e) {}
+      if (db[name] || dupInDO) return json({ error: '这个账号已经被注册过了' }, 400);
       const salt = hex(crypto.getRandomValues(new Uint8Array(8)));
       db[name] = { salt, pass: await hashPass(pass, salt), score: 0, arrows: 100, banned: false, isAdmin: false, isDeveloper: false, reg: Date.now(), lastLogin: 0 };
       await putDb(env, db);
+      /* 同步创建到房间服务(DO), 否则新账号在 DO 重启前无法计分/买箭/加好友; 重试3次 */
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+          const rr = await stub.fetch('https://do/user-create', { method: 'POST', body: JSON.stringify(db[name]) });
+          if (rr.ok) break;
+          console.error('[register] user-create 响应异常 attempt=' + attempt, rr.status);
+        } catch (e) { console.error('[register] user-create 失败 attempt=' + attempt, String(e).slice(0, 120)); }
+        if (attempt < 2) await new Promise(r => setTimeout(r, 800));
+      }
       const u = { ...db[name], _name: name };
       return json({ token: await issueToken(env, name), user: pubUser(u) });
     }
@@ -84,7 +100,15 @@ export default {
         const name = String(body.username || '').trim();
         const pass = String(body.password || '');
         const db = await getDb(env);
-        const u = db[name];
+        let u = db[name];
+        if (!u) {
+          /* KV 副本可能滞后: 回源 DO 查询 */
+          try {
+            const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+            const rr = await stub.fetch('https://do/user-check?name=' + encodeURIComponent(name));
+            if (rr.ok) { const d = await rr.json(); if (d.name && d.user) u = d.user; }
+          } catch (e) {}
+        }
         if (!u) return json({ error: '账号不存在，请先注册' }, 400);
         if (await hashPass(pass, u.salt) !== u.pass) return json({ error: '密码错误！' }, 400);
         if (u.banned) return json({ error: 'banned' }, 403);
@@ -140,6 +164,17 @@ export default {
     if (path === '/api/friend/accept' && request.method === 'POST') { try { return json(await fop('accept', String(body.from || '').slice(0, 16))); } catch (e) { return json({ error: e.message }, 400); } }
     if (path === '/api/friend/reject' && request.method === 'POST') { try { return json(await fop('reject', String(body.from || '').slice(0, 16))); } catch (e) { return json({ error: e.message }, 400); } }
     if (path === '/api/friend/cancel' && request.method === 'POST') { try { return json(await fop('cancel', String(body.to || '').slice(0, 16))); } catch (e) { return json({ error: e.message }, 400); } }
+    if (path === '/api/sync-me' && request.method === 'POST') {
+      try {
+        const db = await getDb(env);
+        const u = db[me.name];
+        if (!u) return json({ error: '账号不存在于主库' }, 400);
+        const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+        const r = await stub.fetch('https://do/user-create', { method: 'POST', body: JSON.stringify(u) });
+        const d = await r.json();
+        return json({ ok: true, already: !!d.already });
+      } catch (e) { return json({ error: '同步失败' }, 500); }
+    }
     if (path === '/api/friend/gift' && request.method === 'POST') {
       try {
         const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
