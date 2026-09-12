@@ -17,7 +17,8 @@ export class RoomDO {
   }
   async ensure() {
     if (this.db && this.secret) return;
-    /* S3 备份优先(每次变更都会存, 是最新状态), KV 只是兜底(分数等可能陈旧) */
+    /* 数据加载优先级: DO 自带存储(强一致, 最新) -> S3 备份 -> KV 兜底 */
+    try { if (!this.db) this.db = (await this.state.storage.get('db')) || null; } catch (e) {}
     try { if (!this.db) this.db = JSON.parse((await this.s3GetObj('bow-db.json')) || 'null'); } catch (e) {}
     try { if (!this.db || !Object.keys(this.db).length) this.db = JSON.parse((await this.env.BOW_KV.get('db')) || 'null'); } catch (e) {}
     if (!this.secret) this.secret = await this.sha256((this.env.SECRET_PEPPER || 'bow-fallback-v2') + '|bow-master|v1');
@@ -33,7 +34,21 @@ export class RoomDO {
     }
     if (!this.secret) this.secret = b64u(crypto.getRandomValues(new Uint8Array(32)).buffer);
     try { await this.env.BOW_KV.put('db', JSON.stringify(this.db)); } catch (e) {}
-    this.s3ScheduleSave();
+    await this.persistDb();
+  }
+
+  async syncUsersFromKV(needName) {
+    for (let i = 0; i < 3; i++) {
+      try {
+        const fresh = JSON.parse((await this.env.BOW_KV.get('db')) || 'null');
+        if (fresh) {
+          for (const k of Object.keys(fresh)) { if (!this.db[k]) this.db[k] = fresh[k]; }
+          if (this.db[needName]) return true;
+        }
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 700));
+    }
+    return !!this.db[needName];
   }
 
   async fetch(request) {
@@ -71,8 +86,15 @@ export class RoomDO {
       await this.ensure();
       const b = await request.json();
       const name = b.name, delta = b.delta, fp = b.fp;
-      const u = this.db[name];
-      if (!u) return new Response(JSON.stringify({ error: '账号不存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      if (!this.db[name]) { try { await this.syncUsersFromKV(name); } catch (e) {} }
+      let u = this.db[name];
+      if (!u) {
+        /* 令牌已验签(账号在注册链路中存在), 这里自动建档兜底, 避免滚动窗口期丢分 */
+        if (!delta || delta < 1 || delta > 10) return new Response(JSON.stringify({ error: '账号不存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        this.db[name] = { salt: '', pass: '', score: 0, arrows: 100, banned: false, isAdmin: false, isDeveloper: false, reg: Date.now(), lastLogin: Date.now() };
+        u = this.db[name];
+        try { await this.state.storage.put('db', this.db); } catch (e) {}   // 建档立即持久化
+      }
       if (!Number.isInteger(delta) || delta < 1 || delta > 10) {
         this.warn(name, '非法加分请求 delta=' + delta);
         return new Response(JSON.stringify({ error: '作弊数据已记录', score: u.score }), { status: 403, headers: { 'Content-Type': 'application/json' } });
@@ -94,16 +116,17 @@ export class RoomDO {
       if (a.ops.length > 900) this.warn(name, '加分频率异常: '+a.ops.length+'次/60秒 (≈'+(Math.round(a.ops.length/6)/10)+' CPS, 远超人类手速)');
       if (fp) { a.fps.add(fp); if (a.fps.size > 3) this.warn(name, '异常多设备指纹(' + a.fps.size + '种)'); }
       u.score = Math.max(0, (u.score || 0) + delta);
-      this.s3ScheduleSave();
+      await this.persistDb();
       return new Response(JSON.stringify({ score: u.score }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/arrow/use' && request.method === 'POST') {
       await this.ensure();
       const b = await request.json();
+      if (!this.db[b.name]) { try { await this.syncUsersFromKV(b.name); } catch (e) {} }
       const u = this.db[b.name];
       if (!u) return new Response(JSON.stringify({ error: '账号不存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       u.arrows = Math.max(0, (u.arrows || 0) - 1);
-      this.s3ScheduleSave();
+      await this.persistDb();
       return new Response(JSON.stringify({ arrows: u.arrows }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/user-score') {
@@ -112,15 +135,27 @@ export class RoomDO {
       const u = this.db[n];
       return new Response(JSON.stringify({ score: u ? (u.score|0) : null, arrows: u ? (u.arrows|0) : null }), { headers: { 'Content-Type': 'application/json' } });
     }
+    if (url.pathname === '/dbdbg') {
+      const mem = Object.keys(this.db || {});
+      let st = null, stErr = '';
+      try { const v = await this.state.storage.get('db'); st = v ? Object.keys(v) : null; } catch (e) { stErr = String(e).slice(0, 100); }
+      return new Response(JSON.stringify({ memKeys: mem, stateKeys: st, stErr, hasPepper: !!this.env.SECRET_PEPPER }), { headers: { 'Content-Type': 'application/json' } });
+    }
     if (url.pathname === '/user-check') {
       await this.ensure();
       const want = String(url.searchParams.get('userId') || '');
       const byName = String(url.searchParams.get('name') || '');
-      for (const [name, u] of Object.entries(this.db)) {
-        if ((byName && name === byName) || (want && (await nameToId(name)) === want)) {
-          return new Response(JSON.stringify({ name, user: u }), { headers: { 'Content-Type': 'application/json' } });
+      const scan = async () => {
+        for (const [name, u] of Object.entries(this.db)) {
+          if ((byName && name === byName) || (want && (await nameToId(name)) === want)) {
+            return { name, user: u };
+          }
         }
-      }
+        return null;
+      };
+      let f = await scan();
+      if (!f) { try { await this.syncUsersFromKV(byName || want); f = await scan(); } catch (e) {} }
+      if (f) return new Response(JSON.stringify({ name: f.name, user: f.user }), { headers: { 'Content-Type': 'application/json' } });
       return new Response(JSON.stringify({}), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/user-exists') {
@@ -140,8 +175,7 @@ export class RoomDO {
         banned: false, isAdmin: false, isDeveloper: false,
         reg: b.reg || Date.now(), lastLogin: b.lastLogin || 0,
       };
-      try { await this.env.BOW_KV.put('db', JSON.stringify(this.db)); } catch (e) {}
-      this.s3ScheduleSave();
+      await this.persistDb();   // 注册用户立即持久化到 DO 强一致存储
       return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/gift' && request.method === 'POST') {
@@ -150,6 +184,8 @@ export class RoomDO {
       const from = String(b.from || '').slice(0, 16);
       const to = String(b.to || '').slice(0, 16);
       const cnt = Math.max(1, Math.min(100, b.count | 0));
+      if (!this.db[from]) { try { await this.syncUsersFromKV(from); } catch (e) {} }
+      if (!this.db[to]) { try { await this.syncUsersFromKV(to); } catch (e) {} }
       const uf = this.db[from], ut = this.db[to];
       if (from === to) return new Response(JSON.stringify({ error: '不能送给自己' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       if (!uf || !ut) return new Response(JSON.stringify({ error: '对方账号不存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -162,7 +198,7 @@ export class RoomDO {
       const text = '🎁 送了你 ' + cnt + ' 支箭';
       if (!uf.dm) uf.dm = []; uf.dm.push({ from, to, text, ts: now }); uf.dm = uf.dm.slice(-300);
       if (!ut.dm) ut.dm = []; ut.dm.push({ from, to, text, ts: now }); ut.dm = ut.dm.slice(-300);
-      this.s3ScheduleSave();
+      await this.persistDb();
       const target = this.online.get(to);
       if (target) { try { target.send(JSON.stringify({ t: 'gift', from, count: cnt })); } catch (e) {} }
       return new Response(JSON.stringify({ ok: true, arrows: uf.arrows }), { headers: { 'Content-Type': 'application/json' } });
@@ -170,6 +206,7 @@ export class RoomDO {
     if (url.pathname === '/shop/buy' && request.method === 'POST') {
       await this.ensure();
       const b = await request.json();
+      if (!this.db[b.name]) { try { await this.syncUsersFromKV(b.name); } catch (e) {} }
       const u = this.db[b.name];
       if (!u) return new Response(JSON.stringify({ error: '账号不存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       const count = Math.floor(b.count | 0);
@@ -178,7 +215,7 @@ export class RoomDO {
       if ((u.score || 0) < cost) return new Response(JSON.stringify({ error: '积分不足' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       u.score -= cost;
       u.arrows = (u.arrows || 0) + count;
-      this.s3ScheduleSave();
+      await this.persistDb();
       return new Response(JSON.stringify({ score: u.score, arrows: u.arrows }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/audit-ev' && request.method === 'POST') {
@@ -300,7 +337,7 @@ export class RoomDO {
       const now = Date.now();
       if (uf) { if (!uf.dm) uf.dm = []; uf.dm.push({ from, to, text, ts: now }); uf.dm = uf.dm.slice(-300); }
       if (ut) { if (!ut.dm) ut.dm = []; ut.dm.push({ from, to, text, ts: now }); ut.dm = ut.dm.slice(-300); }
-      if (uf || ut) this.s3ScheduleSave();
+      if (uf || ut) await this.persistDb();
       const target = this.online.get(to);
       if (target) {
         try { target.send(JSON.stringify({ t: 'dm', from, text, ts: now })); } catch (e) {}
@@ -437,6 +474,19 @@ export class RoomDO {
       return null;
     } catch (e) { return null; }
   }
+  async s3SaveNow() {
+    const bodyJson = JSON.stringify(this.db);
+    try {
+      const uri = '/' + this.env.S3_BUCKET + '/bow-db.json';
+      const h = await this.s3Auth('PUT', uri, bodyJson, 'application/json');
+      await this.s3FetchT('https://' + this.env.S3_ENDPOINT + uri, { method: 'PUT', headers: { ...h, 'Content-Type': 'application/json' }, body: bodyJson }, 6000);
+    } catch (e) {}
+    try { await this.env.BOW_KV.put('db', bodyJson); } catch (e) {}
+  }
+  async persistDb() {
+    this.s3ScheduleSave();   // 尽力而为的异地备份(可失败)
+    try { await this.state.storage.put('db', this.db); } catch (e) {}   // 权威持久化
+  }
   s3ScheduleSave() {
     if (this._s3T) return;
     this._s3T = setTimeout(async () => {
@@ -472,3 +522,17 @@ function genCode() {
   for (let i = 0; i < 6; i++) s += cs[Math.floor(Math.random() * cs.length)];
   return s;
 }
+
+/* v5.3.1 */
+
+/* v5.3.2 */
+
+/* v5.3.3 重启测试 */
+
+/* v5.3.4 重启验证 */
+
+/* v5.3.5 */
+
+/* v5.3.6 */
+
+/* v5.3.7 */

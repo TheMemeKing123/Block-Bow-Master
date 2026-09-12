@@ -517,7 +517,8 @@ function sfx(type){
 /* ---------- 账号系统 v4：中心服务器 + token（localStorage 只存 token） ---------- */
 const ADMIN_NAME = '为啥全部姓名都在';   // 服务器保留的开发者账号
 const TOKEN_KEY = 'mcBow_token_v4';
-let AUTH = { token: (function(){ try{ return localStorage.getItem(TOKEN_KEY); }catch(e){ return null; } })(), user: null };
+const TOKEN_KEY_TAB = 'mcBow_token_tab';   // 每标签独立会话: 多标签可登录不同账号
+let AUTH = { token: (function(){ try{ return sessionStorage.getItem(TOKEN_KEY_TAB) || localStorage.getItem(TOKEN_KEY); }catch(e){ return null; } })(), user: null };
 let USER_CACHE = {};        // 兼容层: 用户表缓存(管理面板/好友判定用)
 let ONLINE_SET = new Set(); // 在线玩家名缓存
 
@@ -535,6 +536,7 @@ async function api(path, opts = {}) {
   if (res.status === 401 && !opts.skipAuth) {
     AUTH.token = null; AUTH.user = null;
     try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    try { sessionStorage.removeItem(TOKEN_KEY_TAB); } catch (e) {}
     clearSession();
     if (curScreen !== 'screen-login' && curScreen !== 'screen-register' && curScreen !== 'screen-game') show('screen-login');
   }
@@ -543,11 +545,12 @@ async function api(path, opts = {}) {
 }
 function saveAuth(token, user){
   AUTH.token = token; AUTH.user = user;
+  try{ sessionStorage.setItem(TOKEN_KEY_TAB, token); }catch(e){}
   try{ localStorage.setItem(TOKEN_KEY, token); }catch(e){}
   setSession(user.username);
   USER_CACHE[user.username] = { score: user.score||0, banned: !!user.banned, isAdmin: !!user.isAdmin, isDeveloper: !!user.isDeveloper, reg: user.reg||0, lastLogin: user.lastLogin||0 };
 }
-function clearAuth(){ AUTH.token = null; AUTH.user = null; try{ localStorage.removeItem(TOKEN_KEY); }catch(e){} }
+function clearAuth(){ AUTH.token = null; AUTH.user = null; try{ localStorage.removeItem(TOKEN_KEY); }catch(e){} try{ sessionStorage.removeItem(TOKEN_KEY_TAB); }catch(e){} }
 
 function dbLoad(){ return JSON.parse(JSON.stringify(USER_CACHE || {})); }
 function displayName(name){ return name === ADMIN_NAME ? '管理员' : name; }
@@ -2248,7 +2251,6 @@ function handleGameData(d){
   if(AUTH.token){
     api('/api/me', { skipAuth:true }).then(d=>{
       AUTH.user = d.user;
-      try{ localStorage.setItem(TOKEN_KEY, AUTH.token); }catch(e){}
       setSession(d.user.username);
       USER_CACHE[d.user.username] = { score:d.user.score||0, banned:false, isAdmin:!!d.user.isAdmin, isDeveloper:!!d.user.isDeveloper, reg:d.user.reg||0, lastLogin:d.user.lastLogin||0 };
       enterLobby();

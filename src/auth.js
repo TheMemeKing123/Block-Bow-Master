@@ -12,7 +12,7 @@ const b64u = (buf) => {
 };
 const bytesFromB64u = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 const hex = (buf) => [...new Uint8Array(buf)].map((c) => c.toString(16).padStart(2, '0')).join('');
-const bytesFromHex = (h) => new Uint8Array(h.match(/../g).map((b) => parseInt(b, 16)));
+const bytesFromHex = (h) => new Uint8Array((h || '').match(/../g).map((b) => parseInt(b, 16)));
 
 async function sha1Hex(s) { return hex(await crypto.subtle.digest('SHA-1', enc.encode(s))); }
 async function sha256Hex(s) { return hex(await crypto.subtle.digest('SHA-256', enc.encode(s))); }
@@ -68,24 +68,39 @@ async function userFromToken(env, token) {
   try {
     const p = JSON.parse(dec.decode(bytesFromB64u(head)));
     if (!p.userId || !p.exp || p.exp < Date.now()) { console.log('[auth] bad payload'); return null; }
-    const db = await getDb(env);
+    let db = await getDb(env);
+    let f = null;
     for (const [name, u] of Object.entries(db)) {
-      if (await nameToId(name) === p.userId) {
-        if (u.banned) return null;
-        return { name, ...u };
-      }
+      if (await nameToId(name) === p.userId) { f = { name, ...u }; break; }
     }
-    /* KV 副本可能滞后: 新注册账号回源 DO 查询(DO 在注册时会同步收到的用户) */
-    try {
-      const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
-      const r = await stub.fetch('https://do/user-check?userId=' + encodeURIComponent(p.userId));
-      if (r.ok) {
-        const d = await r.json();
-        if (d.name && d.user && !d.user.banned) return { name: d.name, ...d.user };
-      }
-    } catch (e) {}
-    console.log('[auth] userId not found in db');
-    return null;
+    /* 实例缓存可能滞后: 绕过缓存直读 KV, 找到新注册账号后刷新缓存 */
+    if (!f) {
+      try {
+        const fresh = JSON.parse((await env.BOW_KV.get('db')) || 'null');
+        if (fresh) {
+          for (const [name, u] of Object.entries(fresh)) {
+            if (await nameToId(name) === p.userId) { dbCache = fresh; f = { name, ...u }; break; }
+          }
+        }
+      } catch (e) {}
+    }
+    /* 仍找不到: 回源 DO 查询 */
+    if (!f) {
+      try {
+        const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+        const r = await stub.fetch('https://do/user-check?userId=' + encodeURIComponent(p.userId));
+        if (r.ok) {
+          const d = await r.json();
+          if (d.name && d.user && !d.user.banned) {
+            try { const cur = await env.BOW_KV.get('db'); if (cur) dbCache = JSON.parse(cur); } catch (e) {}
+            return { name: d.name, ...d.user };
+          }
+        }
+      } catch (e) {}
+    }
+    if (f && f.banned) return null;
+    if (!f) console.log('[auth] userId not found in db');
+    return f;
   } catch (e) { return null; }
 }
 function pubUser(u) {

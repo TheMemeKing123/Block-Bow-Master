@@ -81,17 +81,20 @@ export default {
       if (db[name] || dupInDO) return json({ error: '这个账号已经被注册过了' }, 400);
       const salt = hex(crypto.getRandomValues(new Uint8Array(8)));
       db[name] = { salt, pass: await hashPass(pass, salt), score: 0, arrows: 100, banned: false, isAdmin: false, isDeveloper: false, reg: Date.now(), lastLogin: 0 };
-      await putDb(env, db);
-      /* 同步创建到房间服务(DO), 否则新账号在 DO 重启前无法计分/买箭/加好友; 重试3次 */
-      for (let attempt = 0; attempt < 3; attempt++) {
+      /* 同步创建到房间服务(DO), 并验证确实写入; 失败则明确告知用户重试 */
+      let doSynced = false;
+      for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
-          const rr = await stub.fetch('https://do/user-create', { method: 'POST', body: JSON.stringify(db[name]) });
-          if (rr.ok) break;
-          console.error('[register] user-create 响应异常 attempt=' + attempt, rr.status);
+          await stub.fetch('https://do/user-create', { method: 'POST', body: JSON.stringify(db[name]) });
+          const vr = await stub.fetch('https://do/user-exists?name=' + encodeURIComponent(name));
+          const vd = await vr.json();
+          if (vd.exists) { doSynced = true; break; }
+          console.error('[register] user-create 验证未通过 attempt=' + attempt);
         } catch (e) { console.error('[register] user-create 失败 attempt=' + attempt, String(e).slice(0, 120)); }
-        if (attempt < 2) await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 700));
       }
+      if (!doSynced) return json({ error: '注册服务繁忙，请稍后再试一次' }, 503);
       const u = { ...db[name], _name: name };
       return json({ token: await issueToken(env, name), user: pubUser(u) });
     }
@@ -110,10 +113,18 @@ export default {
           } catch (e) {}
         }
         if (!u) return json({ error: '账号不存在，请先注册' }, 400);
+        /* 自动建档账号(无密码)首次登录即认领: 设置密码 */
+        if (!u.salt && !u.pass) {
+          if (pass.length < 6) return json({ error: '密码至少 6 位' }, 400);
+          const csalt = hex(crypto.getRandomValues(new Uint8Array(8)));
+          u.salt = csalt;
+          u.pass = await hashPass(pass, csalt);
+          await putDb(env, db);
+          return json({ token: await issueToken(env, name), user: pubUser({ ...u, _name: name }) });
+        }
         if (await hashPass(pass, u.salt) !== u.pass) return json({ error: '密码错误！' }, 400);
         if (u.banned) return json({ error: 'banned' }, 403);
         u.lastLogin = Date.now();
-        await putDb(env, db);
         let uo = { ...u, _name: name };
         try {
           const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
@@ -164,6 +175,19 @@ export default {
     if (path === '/api/friend/accept' && request.method === 'POST') { try { return json(await fop('accept', String(body.from || '').slice(0, 16))); } catch (e) { return json({ error: e.message }, 400); } }
     if (path === '/api/friend/reject' && request.method === 'POST') { try { return json(await fop('reject', String(body.from || '').slice(0, 16))); } catch (e) { return json({ error: e.message }, 400); } }
     if (path === '/api/friend/cancel' && request.method === 'POST') { try { return json(await fop('cancel', String(body.to || '').slice(0, 16))); } catch (e) { return json({ error: e.message }, 400); } }
+    if (path === '/api/ucdbg' && request.method === 'GET') {
+      if (!me.isDeveloper) return json({ error: '无权' }, 403);
+      const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+      const nm = url.searchParams.get('name') || me.name;
+      const r = await stub.fetch('https://do/user-check?name=' + encodeURIComponent(nm));
+      return new Response(await r.text(), { status: r.status, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (path === '/api/dbdbg' && request.method === 'GET') {
+      if (!me.isDeveloper) return json({ error: '无权' }, 403);
+      const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+      const r = await stub.fetch('https://do/dbdbg');
+      return new Response(await r.text(), { status: r.status, headers: { 'Content-Type': 'application/json' } });
+    }
     if (path === '/api/sync-me' && request.method === 'POST') {
       try {
         const db = await getDb(env);
