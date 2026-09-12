@@ -1700,7 +1700,7 @@ function loop(){
     const s = G.steves[sname];
     const pp = G.foePose[sname];
     const prevX = s.group.position.x, prevZ = s.group.position.z;
-    if(pp && pp.x !== undefined){ s.group.position.x += (pp.x - s.group.position.x)*0.25; s.group.position.z += (pp.z - s.group.position.z)*0.25; s.group.position.y = 0; }
+    if(pp && pp.x !== undefined){ s.group.position.x += (pp.x - s.group.position.x)*0.25; s.group.position.z += (pp.z - s.group.position.z)*0.25; s.group.position.y = Math.max(0, ((pp.y === undefined ? 1.62 : pp.y)) - 1.62); }
     s.group.rotation.y = (Math.PI + ((pp && pp.yaw) || 0));
     const d = (pp && pp.draw) || 0;
     const mv = Math.hypot(s.group.position.x - prevX, s.group.position.z - prevZ);
@@ -1726,7 +1726,7 @@ function loop(){
   /* 姿态同步（节流） */
   if(G.mode==='multi' && t - G.lastPose > 0.1){
     G.lastPose = t;
-    netSend({t:'pose', yaw:G.yaw, draw:G.draw, x:camera.position.x, z:camera.position.z});
+    netSend({t:'pose', yaw:G.yaw, draw:G.draw, x:camera.position.x, y:camera.position.y, z:camera.position.z});
   }
 
   renderer.render(scene, camera);
@@ -2246,7 +2246,7 @@ function handleGameData(d){
     updateScoreboard();
   }
   else if(d.t === 'miss'){ sfx('miss'); }
-  else if(d.t === 'pose'){ ensureSteve(from); G.foePose[from] = { yaw: d.yaw || 0, draw: d.draw || 0, x: d.x, z: d.z }; }
+  else if(d.t === 'pose'){ ensureSteve(from); G.foePose[from] = { yaw: d.yaw || 0, draw: d.draw || 0, x: d.x, y: (d.y === undefined ? 1.62 : d.y), z: d.z }; }
   else if(d.t === 'leave'){ if(G.steves[from]){ scene.remove(G.steves[from].group); delete G.steves[from]; } updateScoreboard(); }
   else if(d.t === 'invite-fail'){ toast('邀请失败：' + (d.reason || '对方不在线'), false); }
 }
