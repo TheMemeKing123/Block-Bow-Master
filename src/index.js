@@ -63,7 +63,9 @@ export default {
         const resp = await fetch(base + '/chat/completions', { method: 'POST', headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + (env.AI_API_KEY || ''),
-          'x-opencode-session': 'bow-master-do'
+          'x-opencode-session': 'bow-master-' + Math.random().toString(36).slice(2, 10),
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'application/json'
         }, body: JSON.stringify(payload) });
         const txt = await resp.text();
         return new Response(txt, { status: resp.status, headers: { 'Content-Type': 'application/json' } });
