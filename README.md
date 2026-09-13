@@ -50,3 +50,11 @@ public/index.html 前端（和 v4.0 相同，不用改）
 <!-- CI 测试标记 -->
 
 <!-- PR 流程验证 -->
+
+---
+
+## 版权与授权 ©
+
+© 2026 xiaopi668 · **保留所有权利 / All Rights Reserved**
+
+本项目为专有软件，未经作者书面授权不得复制、修改、分发或商用。详见 [LICENSE](LICENSE)。
