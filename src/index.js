@@ -37,7 +37,7 @@ async function notifyUser(env, to, payload) {
 const NAME_RE = /[<>"'\/\\]/;
 const ADMIN_API = ['/api/admin/'];
 const AUTH_API = ['/api/me', '/api/logout', '/api/online', '/api/users/public', '/api/score', '/api/settings/title'];
-const SP_TYPES = { track: 40, split: 20, ice: 10, boom: 25, shadow: 30 };
+const SP_TYPES = { track: 8, split: 5, ice: 3, boom: 8, shadow: 10 };
 
 export default {
   async fetch(request, env) {

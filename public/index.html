@@ -643,7 +643,7 @@ function bindShop(){
   if(bs) bs.onclick = () => { sfx('ui'); refreshShop(); sm.style.display = 'flex'; };
   if($('btn-shop-close')) $('btn-shop-close').onclick = () => { sm.style.display = 'none'; };
   sm.onclick = (ev) => { if(ev.target === sm) sm.style.display = 'none'; };
-  window.SP_INFO = { track:{n:'🌀 追踪箭',e:'轻微拐弯追踪靶心',p:40}, split:{n:'💥 分裂箭',e:'命中后散射3支可连击',p:20}, ice:{n:'❄️ 冰冻箭',e:'命中冰冻标靶3秒',p:10}, boom:{n:'💣 爆裂箭',e:'爆裂波及相邻标靶',p:25}, shadow:{n:'👤 影分箭',e:'隐身3秒+本箭必中靶心',p:30} };
+  window.SP_INFO = { track:{n:'🌀 追踪箭',e:'轻微拐弯追踪靶心',p:8}, split:{n:'💥 分裂箭',e:'命中后散射3支可连击',p:5}, ice:{n:'❄️ 冰冻箭',e:'命中冰冻标靶3秒',p:3}, boom:{n:'💣 爆裂箭',e:'爆裂波及相邻标靶',p:8}, shadow:{n:'👤 影分箭',e:'隐身3秒+本箭必中靶心',p:10} };
   window.renderSpShop = function(){
     const box = $('sp-shop'); if(!box) return;
     const u = AUTH.user; const sp = (u && u.sp) || {};
@@ -1115,7 +1115,7 @@ function buildTarget(M, x, y, z){
   const base = new THREE.Mesh(new THREE.BoxGeometry(2.6,0.3,1.4), M.wood);
   base.position.y = -2.0; base.castShadow = true; g.add(base);
   g.position.set(x, y, z);
-  return { group:g, x, y, z, radius:R, shakeT:-9, disc, faceMat };
+  return { group:g, x, y, z, baseX:x, radius:R, shakeT:-9, disc, faceMat };
 }
 function buildSteve(name){
   const g = new THREE.Group();
@@ -1124,7 +1124,7 @@ function buildSteve(name){
   const shirt = new THREE.MeshLambertMaterial({color:0x00a8a8});
   const pants = new THREE.MeshLambertMaterial({color:0x3b4cd8});
   const hair = new THREE.MeshLambertMaterial({color:0x4a2f1d});
-  const headMats = [hair,hair,hair,hair,new THREE.MeshLambertMaterial({map:makeFaceTex()}),hair];
+  const headMats = [hair,hair,hair,hair,hair,new THREE.MeshLambertMaterial({map:makeFaceTex()})];
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), headMats);
   head.position.y = 1.75; head.castShadow = true; g.add(head);
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.75,0.25), shirt);
@@ -1144,7 +1144,7 @@ function buildSteve(name){
   const tipM = new THREE.MeshLambertMaterial({color:0x555555});
   const fletM = new THREE.MeshLambertMaterial({color:0xdedede});
   const bowHold = new THREE.Group(); bowHold.position.set(0,-0.68,0); bowHold.rotation.z = -Math.PI/2;
-  const bow = new THREE.Group(); bow.rotation.x = Math.PI/2;
+  const bow = new THREE.Group(); bow.rotation.x = -Math.PI/2;
   const curvePts = [];
   for(let i=0;i<=12;i++){ const a = (i/12 - 0.5) * 2.2; curvePts.push(new THREE.Vector3(Math.cos(a)*0.4, Math.sin(a)*0.4, 0)); }
   bow.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curvePts), 24, 0.024, 6, false), woodM));
@@ -1369,11 +1369,8 @@ function startGame(mode, variant){
   /* 靶 */
   const targets = [];
   const session = getSession() || '玩家';
-  if(mode === 'multi'){
-    for(let i = 0; i < 8; i++) targets.push(buildTarget(M, slotX(i, 8), 1.8, -22));   // 8个靶位(按站位)
-  } else {
-    targets.push(buildTarget(M, 0, 1.8, -22));
-  }
+  /* 全房共用一个靶(居中), 单人同款 */
+  targets.push(buildTarget(M, 0, 1.8, -22));
   targets.forEach(t=>scene.add(t.group));
 
   /* 玩家站位 */
@@ -1391,7 +1388,7 @@ function startGame(mode, variant){
   if(mode==='multi' && NET.foeName){
     steve = buildSteve(NET.foeName);
     steve.group.position.set(mySlot===0 ? 2.0 : -2.0, 0, 8);
-    steve.group.rotation.y = Math.PI;   // 面向靶子
+    steve.group.rotation.y = 0;   // 模型正面=-z, 面向靶子(靶在-z方向)
     scene.add(steve.group);
   }
 
@@ -1755,7 +1752,7 @@ function onHit(arrow, target, r){
     G.roundScore = (G.roundScore|0) + pts;   // 本局得分（结算/排行榜/个人最佳都用它）
     addScore(G.session, pts);   // 中心服务器记账（账号总积分）
     if(G.variant === 'endless'){   // 无限模式: 每次命中提速+瞬移, 实时刷新个人最佳
-      G.mvSpeed = Math.min(4, G.mvSpeed + 0.12);
+      G.mvSpeed = Math.min(8, G.mvSpeed + 0.12);
       target.x = (Math.random() - 0.5) * 70;
       target.dx = Math.random() < 0.5 ? 1 : -1;
       if(G.roundScore > ((G.best||{}).endless|0)){
@@ -1849,6 +1846,7 @@ function loop(){
     }
   }
   if(G.variant === 'endless' && G.targets && G.targets[0]){
+    /* 只有一个共用靶: 全场横扫(与单人一致) */
     var mtg = G.targets[0];
     if(mtg.dx === undefined){ mtg.dx = 1; }
     mtg.x += mtg.dx * G.mvSpeed * dt;
@@ -1943,7 +1941,8 @@ function loop(){
       s.group.position.x = ip.x;
       s.group.position.z = ip.z;
       s.group.position.y = Math.max(0, (ip.y === undefined ? 0 : ip.y - 1.62));
-      s.group.rotation.y = Math.PI + (ip.yaw || 0);
+      /* 模型正面=-z(与皮肤UV一致), 直接用摄像机yaw, 不再+π */
+      s.group.rotation.y = (ip.yaw || 0);
     }
     const d = (ip && ip.draw) || 0;
     const mv = Math.hypot(s.group.position.x - prevX, s.group.position.z - prevZ);
@@ -1951,9 +1950,9 @@ function loop(){
     const moving = mv > 0.008;
     const swing = moving ? Math.sin(s.walkPhase) * 0.55 : Math.sin(t*2.2)*0.08;
     const idle = Math.sin(t*2.2)*0.12;
-    if(d > 0.05){   // 拉弓：双臂水平前伸
-      s.armL.rotation.x += ((-Math.PI/2 - 0.15*d) - s.armL.rotation.x)*0.3;
-      s.armR.rotation.x += ((-Math.PI/2 + 0.1) - s.armR.rotation.x)*0.3;
+    if(d > 0.05){   // 拉弓：双臂水平前伸(模型正面=-z, 手臂转向-z)
+      s.armL.rotation.x += ((Math.PI/2 + 0.15*d) - s.armL.rotation.x)*0.3;
+      s.armR.rotation.x += ((Math.PI/2 - 0.1) - s.armR.rotation.x)*0.3;
     } else if(moving){   // 走路: 手臂前后摆
       s.armL.rotation.x += ((swing*0.6) - s.armL.rotation.x)*0.2;
       s.armR.rotation.x += ((-swing*0.6) - s.armR.rotation.x)*0.2;
@@ -1963,7 +1962,7 @@ function loop(){
     }
     s.legL.rotation.x = moving ? swing : Math.sin(t*2.2)*0.08;
     s.legR.rotation.x = moving ? -swing : -Math.sin(t*2.2)*0.08;
-    s.head.rotation.y = (ip && ip.yaw) || 0;
+    /* 头是身体的子节点, 身体已随 yaw 整体旋转, 头部相对身体保持 0(否则 yaw 被叠加两次, 头会转两圈) */
     /* 弓弦随拉弓后移, 箭跟着后拉(与第一人称弓同款动作) */
     if(s.bowStr){
       var dcl = Math.max(0, Math.min(1, d));
@@ -2103,7 +2102,7 @@ function onRoomRoster(players){
   const n = Math.max(G.roomPlayers.length, 2);
   camera.position.x = slotX(G.mySlot, n);
   if(G.mode === 'multi' && G.targets){   // 靶位与站位统一重排
-    G.targets.forEach((tg, i) => { const nx = slotX(i, n); tg.group.position.x = nx; tg.x = nx; });
+    if(G.targets.length > 1) G.targets.forEach((tg, i) => { const nx = slotX(i, n); tg.group.position.x = nx; tg.x = nx; tg.baseX = nx; });
   }
   renderWaitPlayers(G.roomPlayers);
 }
@@ -2118,7 +2117,7 @@ function ensureSteve(name){
   const slot = (G.slotBy && G.slotBy[name] !== undefined) ? G.slotBy[name] : 1;
   const pp = G.foePose ? G.foePose[name] : null;
   steve.group.position.set(pp && pp.x !== undefined ? pp.x : slotX(slot, Math.max((G.roomPlayers||[]).length, 2)), 0, pp && pp.z !== undefined ? pp.z : 4);
-  steve.group.rotation.y = Math.PI;
+  steve.group.rotation.y = 0;   // 模型正面=-z, 面向靶子
   scene.add(steve.group);
   G.steves[name] = steve;
   try{ applySkinToSteve(steve, name); }catch(e){}
