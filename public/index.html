@@ -292,7 +292,8 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
       </div>
     </div>
     <div id="touch-actions" style="display:none; position:absolute; right:18px; bottom:26px; z-index:40; user-select:none; touch-action:none">
-      <button id="btn-run-round" style="display:block; margin:0 auto 12px; width:54px; height:54px; border-radius:50%; background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4); color:#fff; font-size:14px; font-family:inherit">跑</button>
+      <button id="btn-fire" style="display:block; margin:0 auto 12px; width:92px; height:92px; border-radius:50%; background:rgba(220,130,40,.55); border:3px solid rgba(255,255,255,.6); color:#fff; font-size:30px; font-family:inherit; touch-action:none">🏹</button>
+    <button id="btn-run-round" style="display:block; margin:0 auto 12px; width:54px; height:54px; border-radius:50%; background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4); color:#fff; font-size:14px; font-family:inherit">跑</button>
       <button id="btn-jump-round" style="display:block; margin:0 auto; width:86px; height:86px; border-radius:50%; background:rgba(110,190,110,.4); border:2px solid rgba(255,255,255,.55); color:#fff; font-size:22px; font-family:inherit">🦘</button>
     </div>
     <div data-page-node-id="Lpsm69udr1kjrlvCt1xpgG" id="hud">
@@ -1326,7 +1327,7 @@ function startGame(mode){
   };
   /* 按设备显示对应操作提示 */
   $('hint').innerHTML = IS_TOUCH
-    ? '左下角摇杆移动 · 右下角跳/跑 · 按住屏幕拉弓瞄准 · 松手射箭'
+    ? '左下角摇杆移动 · 右下角跳/跑 · 拖动屏幕瞄准 · 按住🏹键蓄力松手射箭'
     : '<kbd>WASD</kbd>移动 ｜ <kbd>Shift</kbd>疾跑 ｜ <kbd>空格</kbd>跳跃 ｜ <kbd>左键</kbd>射击/蓄力 ｜ <kbd>右键</kbd>狙击 ｜ 距靶<12m 不计分！';
   $('click-to-play').querySelector('.big').textContent = IS_TOUCH ? '触摸屏幕开始射击' : '点击开始射击';
   /* 聊天面板：联机房间显示，单人隐藏 */
@@ -1493,6 +1494,12 @@ function bindInput(){
     }
     const jb = $('btn-jump-round');
     if(jb) jb.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); G.wantJump = true; });
+    var fb = $('btn-fire');
+    if(fb){
+      fb.addEventListener('pointerdown', function(ev){ ev.preventDefault(); ev.stopPropagation(); if(P.downId !== null || !G || G.drawing) return; P.downId = ev.pointerId; G.drawing = true; G.draw = 0; sfx('draw'); });
+      fb.addEventListener('pointerup', function(ev){ ev.preventDefault(); ev.stopPropagation(); if(ev.pointerId !== P.downId) return; P.downId = null; if(G && G.drawing){ G.drawing = false; if(G.draw < 0.15) G.draw = 0.3; releaseArrow(); G.draw = 0; renderSpSelect(); } });
+      fb.addEventListener('pointercancel', function(ev){ if(ev.pointerId !== P.downId) return; P.downId = null; if(G && G.drawing){ G.drawing = false; G.draw = 0; } });
+    }
     const rb = $('btn-run-round');
     if(rb) rb.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); RUN.mode = !RUN.mode; rb.style.background = RUN.mode ? 'rgba(255,200,60,.5)' : 'rgba(255,255,255,.15)'; });
   })();
