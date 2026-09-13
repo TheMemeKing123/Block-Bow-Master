@@ -1240,7 +1240,7 @@ function startGame(mode){
   const targets = [];
   const session = getSession() || '玩家';
   if(mode === 'multi'){
-    const mp = NET.roomMax || 4;   // 按房间人数生成标靶（2/3/4/6/8）
+    const mp = NET.maxPlayers || 4;   // 按房间人数生成标靶（2/3/4/6/8）
     for(let i = 0; i < mp; i++) targets.push(buildTarget(M, slotX(i, mp), 1.8, -22));
   } else {
     targets.push(buildTarget(M, 0, 1.8, -22));
@@ -1249,7 +1249,7 @@ function startGame(mode){
 
   /* 玩家站位 */
   const mySlot = 0;
-  const mp = NET.roomMax || 4;
+  const mp = NET.maxPlayers || 4;
   const px = (mode==='multi') ? slotX(0, mp) : 0;
   camera.position.set(px, 1.62, 8);
   camera.rotation.order = 'YXZ';
@@ -1765,7 +1765,7 @@ function hostRoom(setup, isRetry){
   cleanupNet();
   if(!isRetry) NET.retry = 0;
   NET.isHost = true; NET.roomSetup = setup;
-  NET.roomMax = (setup && setup.max) ? Number(setup.max) : 4;   // 记录房间人数
+  NET.maxPlayers = (setup && setup.max) ? Number(setup.max) : 4;   // 记录房间人数，供开局生成标靶
   startGame('multi');       // 直接进入世界 等人不打断
   G.waiting = true;
   renderWaitPlayers([G.myName]);
@@ -1845,7 +1845,7 @@ function onRoomRoster(players){
   if(!G.slotBy) G.slotBy = {};
   G.roomPlayers.forEach((n, i) => { if(G.slotBy[n] === undefined) G.slotBy[n] = i; });
   G.mySlot = G.slotBy[me] !== undefined ? G.slotBy[me] : 0;
-  const n = Math.max(G.roomPlayers.length, 2);
+  const n = Math.max(NET.maxPlayers || G.roomPlayers.length, 2);   // 按房间人数排位，避免单人开房只有1个靶
   camera.position.x = slotX(G.mySlot, n);
   if(G.mode === 'multi' && G.targets){   // 靶位与站位统一重排
     G.targets.forEach((tg, i) => { const nx = slotX(i, n); tg.group.position.x = nx; tg.x = nx; });
@@ -1871,7 +1871,7 @@ function ensureSteve(name){
 }
 function ensureAllSteves(){
   if(!G) return;
-  const n = Math.max((G.roomPlayers || []).length, 2);
+  const n = Math.max(NET.maxPlayers || (G.roomPlayers || []).length, 2);
   (G.roomPlayers || []).forEach(nm => {
     if(nm === getSession()) return;
     const s = ensureSteve(nm);
@@ -2112,6 +2112,7 @@ function joinRoom(code, pass, isRetry){
   cleanupNet();
   if(!isRetry) NET.retry = 0;
   NET.isHost = false; NET.roomCode = code; NET.joinPass = pass || '';
+  NET.maxPlayers = (setup && setup.max) ? Number(setup.max) : 4;   // 记录房间人数
   startGame('multi');
   G.waiting = true;
   renderWaitPlayers([G.myName]);
