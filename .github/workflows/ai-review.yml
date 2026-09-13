@@ -59,11 +59,8 @@ jobs:
           last = ''
           for attempt in range(4):
             try:
-<<<<<<< HEAD
               req = urllib.request.Request('https://vpn.xiaopi.ink/ai/zen/go/v1/chat/completions', data=json.dumps(payload).encode(), headers={
-=======
               req = urllib.request.Request('https://vpn.xiaopi.ink/ai/zen/go/v1/chat/completions', data=json.dumps(payload).encode(), headers={
->>>>>>> d490591 (ci: AI 审查直连美国中继(绕开CF边缘对Actions IP的拦截); worker ai-proxy补中继令牌)
                 'Content-Type': 'application/json',
                 'X-Data-Token': os.environ['AI_PROXY_TOKEN']
               })
