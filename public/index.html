@@ -1381,11 +1381,12 @@ function startGame(mode, variant){
     scene.add(c); clouds.push(c);
   }
 
-  /* 靶 */
+  /* 靶: 无限模式全房共用一个(居中), 其他多人模式每人一个靶位, 单人一个 */
   const targets = [];
   const session = getSession() || '玩家';
-  /* 全房共用一个靶(居中), 单人同款 */
-  targets.push(buildTarget(M, 0, 1.8, -22));
+  const wantLayout = (mode === 'multi' && variant !== 'endless') ? 8 : 1;
+  if(wantLayout === 8){ for(let i = 0; i < 8; i++) targets.push(buildTarget(M, slotX(i, 8), 1.8, -22)); }
+  else targets.push(buildTarget(M, 0, 1.8, -22));
   targets.forEach(t=>scene.add(t.group));
 
   /* 玩家站位 */
@@ -1415,7 +1416,7 @@ function startGame(mode, variant){
     rightBtn:false, everLocked:false,
     recoil:0, myName: displayName(session), myScore: getScore(session), roundScore:0, combo:0, lastHitT:0, missCombo:0,
     foeName: NET.foeName ? displayName(NET.foeName) : '', foeScore:0,
-    arrows:[], particles:[], targets, clouds, steve, trees: treeCols,
+    arrows:[], particles:[], targets, targetsLayout: wantLayout, clouds, steve, trees: treeCols,
     steves:{}, foePose:{}, scores:{}, roomPlayers: session ? [session.slice(0,16)] : [], slotBy:{},
     session, running:true, waiting:false,
     lastPose:0, foeYaw:0, foeDraw:0, foeX:undefined, foeZ:undefined, vy:0,
@@ -1461,8 +1462,9 @@ function applyGameMode(mode){
   G.variant = mode;
   G.roundScore = 0; G.combo = 0; G.lastHitT = 0;   // 换模式 = 新一局, 计分清零
   G.mvSpeed = 1.4; G.rushEnded = false; G.deadline = 0;
+  ensureTargets();   // 按模式重建靶阵(无限=1个共用靶, 其他=8靶位)
   /* 共用靶归位: 两端从同一位置开新局 */
-  if(G.targets && G.targets[0]){
+  if(G.targets.length === 1 && G.targets[0]){
     G.targets[0].x = 0; G.targets[0].rx = undefined; G.targets[0].dx = 1;
     G.targets[0].group.position.x = 0;
   }
@@ -1473,6 +1475,24 @@ function applyGameMode(mode){
   if(mode === 'rush30') mt.textContent = '⏳ 等待人齐…';   // 多人狂射: 服务器满员时广播开跑
   banner('🎮 房间模式：' + modeName(mode),
     mode === 'rush30' ? '人齐后自动开始 30 秒狂射' : (mode === 'precision' ? '只算靶心 · 边缘命中扣箭' : (mode === 'endless' ? '命中后标靶提速瞬移 · 连击加成' : '共同靶场 · 随意练习')));
+  updateScoreboard();
+}
+/* 靶阵布局: 无限模式=全房1个共用靶, 其他模式=8个靶位(按站位) */
+function ensureTargets(){
+  if(!G || !G.active || !scene) return;
+  var want = (G.mode === 'multi' && G.variant !== 'endless') ? 8 : 1;
+  if(G.targetsLayout === want && G.targets.length === want) return;
+  for(var i = 0; i < G.targets.length; i++){ try{ scene.remove(G.targets[i].group); }catch(e){} }
+  G.targets = []; G.targetsLayout = want;
+  var M = buildMaterials();
+  if(want === 1){
+    var tg = buildTarget(M, 0, 1.8, -22);
+    tg.rx = undefined;
+    G.targets.push(tg);
+  } else {
+    for(var j = 0; j < 8; j++) G.targets.push(buildTarget(M, slotX(j, 8), 1.8, -22));
+  }
+  G.targets.forEach(function(t){ scene.add(t.group); });
   updateScoreboard();
 }
 /* 狂射开跑(服务器 round-start 广播, 全房同步) */
@@ -2028,8 +2048,12 @@ function loop(){
     }
     const prev = m.position.clone();
     /* 特殊箭制导: track=轻微拐弯追踪靶心, shadow=强导必中靶心 */
-    if(!a.stuck && (a.sp === 'track' || a.crit) && G.targets && G.targets[0] && m.position.z > G.targets[0].z + 0.2){
+    if(!a.stuck && (a.sp === 'track' || a.crit) && G.targets && G.targets.length && m.position.z > G.targets[0].z + 0.2){
       var tg0 = G.targets[0];
+      if(G.targets.length > 1){   // 多靶布局: 追最近的那块
+        var bd = 1e9;
+        for(var ti = 0; ti < G.targets.length; ti++){ var dd = Math.abs(G.targets[ti].x - m.position.x); if(dd < bd){ bd = dd; tg0 = G.targets[ti]; } }
+      }
       var hx = tg0.x + (a.crit ? 0 : Math.sin(t * 2.1 + a.life * 2.7) * 0.35);
       var hy = tg0.y + (a.crit ? 0 : Math.cos(t * 1.7 + a.life * 1.9) * 0.25);
       var hv = new THREE.Vector3(hx - m.position.x, hy - m.position.y, tg0.z - m.position.z).normalize();
