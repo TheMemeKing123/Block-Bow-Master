@@ -569,6 +569,8 @@ function canAdmin(name){
 function getScore(name){ const u = USER_CACHE[name]; return u ? (u.score||0) : 0; }
 function renderSpSelect(){
   const box = $('sp-select'); if(!box || !G) return;
+  box.style.display = 'flex';   // 修复: 容器默认 display:none, 渲染时切回 flex
+  box.style.display = 'flex';
   const sp = G.sp || {};
   const ICONS = { normal:'🎯', track:'🌀', split:'💥', ice:'❄️', boom:'💣', shadow:'👤' };
   let html = '<div class="spchip' + (G.arrowType==='normal' ? ' on' : '') + '" data-t="normal">' + ICONS.normal + '</div>';
