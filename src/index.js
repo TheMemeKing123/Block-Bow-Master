@@ -54,6 +54,21 @@ export default {
     const me = await userFromToken(env, token);
     const path = url.pathname;
 
+    if (path === '/api/ai-proxy' && request.method === 'POST') {
+      try {
+        if (request.headers.get('X-Internal-Token') !== (env.AI_PROXY_TOKEN || '')) return json({ error: '无权' }, 403);
+        const b = body;   // 请求体已由 readBody 预解析, 不能二次读取
+        const base = (env.AI_BASE_URL || '').replace(/\/+$/, '');
+        const payload = { model: b.model || (env.AI_MODEL || 'glm-5.3-flash'), messages: b.messages || [], temperature: (b.temperature === undefined ? 0.1 : b.temperature), max_tokens: b.max_tokens || 4000 };
+        const resp = await fetch(base + '/chat/completions', { method: 'POST', headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (env.AI_API_KEY || ''),
+          'x-opencode-session': 'bow-master-do'
+        }, body: JSON.stringify(payload) });
+        const txt = await resp.text();
+        return new Response(txt, { status: resp.status, headers: { 'Content-Type': 'application/json' } });
+      } catch (e) { return json({ error: String(e && e.stack || e).slice(0, 300) }, 500); }
+    }
     if (path === '/api/skin/get' && request.method === 'GET') {
       const nm = String(url.searchParams.get('name') || '').slice(0, 16);
       const db = await getDb(env);
