@@ -57,11 +57,12 @@ jobs:
               {"role": "user", "content": "请审查以下 PR 代码变更：\n\n" + diff}
             ],
             "temperature": 0.1,
-            "max_tokens": 2000
+            "max_tokens": 4000
           }
           req = urllib.request.Request(base + '/chat/completions', data=json.dumps(payload).encode(), headers={
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + os.environ['AI_API_KEY']
+            'Authorization': 'Bearer ' + os.environ['AI_API_KEY'],
+            'x-opencode-session': 'bow-master-ci-' + os.environ.get('GITHUB_RUN_ID', '0')
           })
           with urllib.request.urlopen(req, timeout=240) as r:
               d = json.loads(r.read().decode())
