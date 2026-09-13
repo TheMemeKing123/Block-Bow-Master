@@ -131,8 +131,9 @@ input{user-select:text;-webkit-user-select:text}
 /* 狙击镜 */
 /* 遮罩 */
 #sp-select{position:absolute;bottom:178px;left:12px;z-index:30;display:none;gap:5px}
-.spchip{width:46px;height:46px;border-radius:10px;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.28);color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;user-select:none;line-height:1}
+.spchip{position:relative;width:46px;height:46px;border-radius:10px;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.28);color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;user-select:none;line-height:1}
 .spchip b{font-size:10px;color:#ffe08a;margin-top:2px}
+.spchip i{position:absolute;top:1px;right:4px;font-size:9px;font-style:normal;color:#9fd4ff;opacity:.85;line-height:1}
 .spchip.on{border-color:#4ce04c;background:rgba(70,130,70,.55)}
 .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;
   background:rgba(0,0,0,.55);pointer-events:auto;z-index:10}
@@ -409,6 +410,12 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <button class="mc-btn" data-mmode="rush30" style="width:100%;margin:6px 0">⏱ 30秒狂射<br><span style="font-size:11px;color:#9fd4ff">全房同时倒计时 · 比谁分高</span></button>
     <button class="mc-btn small" id="multi-mode-cancel" style="margin-top:8px;min-width:100px">取消</button>
   </div></div>
+<!-- 多人狂射结算 --><div id="rush-result" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.8); z-index:80; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:340px;text-align:center">
+    <b style="font-size:16px">🏁 30秒狂射 · 结算</b>
+    <div id="rush-list" style="margin:12px 0 6px;text-align:left"></div>
+    <div style="color:#888;font-size:11px;margin-bottom:8px">本局已结束 · 房主可在暂停菜单换模式或再开一局</div>
+    <button class="mc-btn small" id="rush-result-ok" style="min-width:120px">继续</button>
+  </div></div>
 <!-- 房间密码输入 --><div id="join-pass-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.65); z-index:60; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:300px;text-align:left">
   <b>🔒 该房间需要密码</b>
   <input id="join-pass-input" class="mc-input" maxlength="16" placeholder="输入房间密码" style="margin:12px 0" autocomplete="off">
@@ -599,21 +606,23 @@ function getScore(name){ const u = USER_CACHE[name]; return u ? (u.score||0) : 0
 function renderSpSelect(){
   const box = $('sp-select'); if(!box || !G) return;
   box.style.display = 'flex';   // 修复: 容器默认 display:none, 渲染时切回 flex
-  box.style.display = 'flex';
   const sp = G.sp || {};
   const ICONS = { normal:'🎯', track:'🌀', split:'💥', ice:'❄️', boom:'💣', shadow:'👤' };
-  let html = '<div class="spchip' + (G.arrowType==='normal' ? ' on' : '') + '" data-t="normal">' + ICONS.normal + '</div>';
-  ['track','split','ice','boom','shadow'].forEach(function(t){
+  const KEYN = { normal:'0', track:'1', split:'2', ice:'3', boom:'4', shadow:'5' };   // 电脑端数字键
+  let html = '<div class="spchip' + (G.arrowType==='normal' ? ' on' : '') + '" data-t="normal">' + ICONS.normal + '<i>' + KEYN.normal + '</i></div>';
+  ['track','split','ice','boom','shadow'].forEach(function(t, idx){
     const c = (sp[t]||0);
-    html += '<div class="spchip' + (G.arrowType===t ? ' on' : '') + '" data-t="' + t + '"' + (c < 1 ? ' style="opacity:.4"' : '') + '>' + ICONS[t] + '<b>' + c + '</b></div>';
+    html += '<div class="spchip' + (G.arrowType===t ? ' on' : '') + '" data-t="' + t + '"' + (c < 1 ? ' style="opacity:.4"' : '') + '>' + ICONS[t] + '<b>' + c + '</b><i>' + KEYN[t] + '</i></div>';
   });
   box.innerHTML = html;
+  /* 按下即切换(比 click 更跟手, 且重建DOM也不影响) */
   box.querySelectorAll('.spchip').forEach(function(ch){
-    ch.onclick = function(){
+    ch.addEventListener('pointerdown', function(ev){
+      ev.stopPropagation(); ev.preventDefault();
       var t = ch.getAttribute('data-t');
       if(t !== 'normal' && ((G.sp||{})[t]||0) < 1){ toast('该特殊箭已用完', false); return; }
       G.arrowType = t; sfx('ui'); renderSpSelect();
-    };
+    });
   });
 }
 function addScore(name, d){
@@ -1398,7 +1407,7 @@ function startGame(mode, variant){
     variant: (['normal','endless','precision','rush30'].indexOf(variant) >= 0 ? variant : 'normal'), deadline: 0, mvSpeed: 1.4, best: ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}),
     yaw:0, pitch:0, draw:0, drawing:false, aiming:false, scoping:false,
     rightBtn:false, everLocked:false,
-    recoil:0, myName: displayName(session), myScore: getScore(session), roundScore:0, combo:0, lastHitT:0,
+    recoil:0, myName: displayName(session), myScore: getScore(session), roundScore:0, combo:0, lastHitT:0, missCombo:0,
     foeName: NET.foeName ? displayName(NET.foeName) : '', foeScore:0,
     arrows:[], particles:[], targets, clouds, steve, trees: treeCols,
     steves:{}, foePose:{}, scores:{}, roomPlayers: session ? [session.slice(0,16)] : [], slotBy:{},
@@ -1413,8 +1422,9 @@ function startGame(mode, variant){
   /* 模式初始化 */
   $('mode-timer').style.display = 'none';
   if (G.variant === 'rush30') {
-    G.deadline = NOW() + 30;   // 30 秒
     $('mode-timer').style.display = 'block';
+    if(mode === 'multi'){ G.deadline = 0; $('mode-timer').textContent = '⏳ 等待人齐…'; }   // 多人: 服务器满员广播开跑
+    else { G.deadline = NOW() + 30; }   // 单人: 立即开始
   }
   if (G.variant === 'endless') {
     $('mode-timer').style.display = 'block';
@@ -1445,13 +1455,47 @@ function applyGameMode(mode){
   G.variant = mode;
   G.roundScore = 0; G.combo = 0; G.lastHitT = 0;   // 换模式 = 新一局, 计分清零
   G.mvSpeed = 1.4; G.rushEnded = false; G.deadline = 0;
+  /* 共用靶归位: 两端从同一位置开新局 */
+  if(G.targets && G.targets[0]){
+    G.targets[0].x = 0; G.targets[0].rx = undefined; G.targets[0].dx = 1;
+    G.targets[0].group.position.x = 0;
+  }
   if(mode === 'rush30') G.deadline = NOW() + 30;
   const mt = $('mode-timer');
   mt.style.display = (mode === 'rush30' || mode === 'endless') ? 'block' : 'none';
   if(mode === 'endless') mt.textContent = '♾️ 得分: 0';
+  if(mode === 'rush30') mt.textContent = '⏳ 等待人齐…';   // 多人狂射: 服务器满员时广播开跑
   banner('🎮 房间模式：' + modeName(mode),
-    mode === 'rush30' ? '30 秒倒计时开始！' : (mode === 'precision' ? '只算靶心 · 边缘命中扣箭' : (mode === 'endless' ? '命中后标靶提速瞬移 · 连击加成' : '共同靶场 · 随意练习')));
+    mode === 'rush30' ? '人齐后自动开始 30 秒狂射' : (mode === 'precision' ? '只算靶心 · 边缘命中扣箭' : (mode === 'endless' ? '命中后标靶提速瞬移 · 连击加成' : '共同靶场 · 随意练习')));
   updateScoreboard();
+}
+/* 狂射开跑(服务器 round-start 广播, 全房同步) */
+function startRushRound(){
+  if(!G || !G.active) return;
+  G.deadline = NOW() + 30;
+  G.rushEnded = false;
+  G.roundScore = 0; G.combo = 0; G.lastHitT = 0; G.missCombo = 0;
+  G.scores = {};   // 清空上一局各玩家得分
+  const mt = $('mode-timer'); if(mt){ mt.style.display = 'block'; }
+  const rr = $('rush-result'); if(rr) rr.style.display = 'none';
+  updateScoreboard();
+  banner('🏁 狂射开始！', '30 秒 · 打得越多分越高');
+  sfx('ui');
+}
+/* 狂射结算页: 全房玩家本局得分排名 */
+function showRushResult(){
+  const box = $('rush-result'); if(!box || !G) return;
+  const me = getSession();
+  const rows = (G.roomPlayers || []).map(function(n){
+    return { n: n, s: (n === me) ? (G.roundScore|0) : (((G.scores || {})[n]) || 0) };
+  });
+  rows.sort(function(a, b){ return b.s - a.s; });
+  const medals = ['🥇','🥈','🥉'];
+  $('rush-list').innerHTML = rows.map(function(r, i){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin:3px 0;background:#1c1c1c;border-radius:4px;font-size:13px"><span>' + (medals[i] || '☆') + ' ' + escapeHtml(displayName(r.n)) + (r.n === me ? '（我）' : '') + '</span><b style="color:#ffd54f">' + r.s + ' 分</b></div>';
+  }).join('');
+  box.style.display = 'flex';
+  $('rush-result-ok').onclick = function(){ box.style.display = 'none'; };
 }
 
 /* ---------- 输入（Pointer Events：触屏 + 鼠标统一支持） ---------- */
@@ -1500,6 +1544,14 @@ function bindInput(){
   });
 
   cv.addEventListener('contextmenu', e=>e.preventDefault());
+  /* 选择器隔离: 点击特殊箭选择器时解除残留拉弓状态并阻断事件冒泡, 保证绝不误射 */
+  const spbox = $('sp-select');
+  if(spbox){
+    ['pointerdown','mousedown','touchstart'].forEach(ev =>
+      spbox.addEventListener(ev, function(e){ e.stopPropagation(); P.downId = null; if(G && G.drawing){ G.drawing = false; G.draw = 0; } }, {passive:true}));
+    ['pointerup','mouseup','pointermove','touchend','touchmove','click'].forEach(ev =>
+      spbox.addEventListener(ev, function(e){ e.stopPropagation(); }, {passive:true}));
+  }
   /* 兜底：阻止浏览器把触摸当滚动/缩放手势 */
   ['touchstart','touchmove','touchend'].forEach(ev=>
     cv.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
@@ -1517,6 +1569,60 @@ function bindInput(){
     P.lastX = e.clientX; P.lastY = e.clientY;
     G.drawing = true; sfx('draw');
   });
+
+  /* 心跳保活: 每15秒给两条长连接发ping(DO回pong), 防空闲被中间设备掐断 */
+  setInterval(function(){
+    try{
+      if(NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify({t:'ping'}));
+      if(FRCHAT.ws && FRCHAT.ws.readyState === 1) FRCHAT.ws.send(JSON.stringify({t:'ping'}));
+    }catch(e){}
+  }, 15000);
+
+  /* 房主断线原地重连: 认领原房间(房码不变), 其他人无感 */
+  function hostReconnect(){
+    if(!NET.roomCode){ exitGame(); return; }
+    NET.retry = (NET.retry||0) + 1;
+    if(NET.retry > 5){
+      toast('重连失败（已尝试5次），请检查网络后刷新页面重试', false);
+      exitGame(); return;
+    }
+    toast('网络波动，正在重连(' + NET.retry + '/5)…');
+    let ws;
+    try{ ws = wsConnect(); }catch(e){ setTimeout(hostReconnect, 1600); return; }
+    NET.ws = ws;
+    ws.onopen = ()=>{
+      ws.send(JSON.stringify({t:'reclaim', code: NET.roomCode, name:(getSession()||'').slice(0,16)}));
+    };
+    ws.onmessage = (ev)=>{
+      const d = netParse(ev);
+      if(!d) return;
+      if(d.t === 'reclaimed'){
+        NET.retry = 0;
+        onRoomRoster(d.players || []);
+        if(d.mode) applyGameMode(d.mode);
+        if(d.roundLeft !== undefined && d.roundLeft > 0){ G.deadline = NOW() + Math.min(30, d.roundLeft); G.rushEnded = false; }
+        banner('已重新连接房间 ' + d.code, '房内 ' + ((d.players||[]).length) + ' 人 · 房码未变');
+        sfx('ui');
+      }
+      else if(d.t === 'reclaim-fail'){
+        /* 房间已超时解散: 回退到重新建房(新码) */
+        toast('原房间已解散，正在重新创建…', false);
+        const setup = NET.roomSetup || {};
+        setup.mode = G ? G.variant : 'normal';
+        NET.roomCode = ''; NET.joined = false;
+        hostRoom(setup, false);
+        return;
+      }
+      else if(d.t === 'mode'){ applyGameMode(d.mode); }
+      else if(d.t === 'round-start'){ startRushRound(); }
+      else if(d.t === 'g'){ handleGameData(d.d); }
+      else if(d.t === 'peer-joined'){ onPeerJoined(d); }
+      else if(d.t === 'peer-left'){ onPeerLeft(d); }
+      else if(d.t === 'room-closed'){ toast('房主已解散房间', false); exitGame(); }
+    };
+    ws.onclose = ()=>{ setTimeout(hostReconnect, 1600); };   // 继续下一轮重连
+    ws.onerror = ()=>{};
+  }
 
   /* 移动 = 瞄准（拖动手指 / 鼠标移动） */
   cv.addEventListener('pointermove', e=>{
@@ -1636,6 +1742,18 @@ function bindInput(){
     const k = e.key.toLowerCase();
     if(k === ' '){ KEYS.space = false; return; }
     if(k === 'shift'){ KEYS.shift = false; return; }
+    /* 数字键切换特殊箭(电脑端): 1-5=特殊箭, 0或`=普通箭 */
+    if('12345'.indexOf(e.key) >= 0 || e.key === '0' || e.key === '`'){
+      var korder = ['track','split','ice','boom','shadow'];
+      var kt = (e.key === '0' || e.key === '`') ? 'normal' : korder[+e.key - 1];
+      if(kt === 'normal' || ((G.sp||{})[kt]||0) >= 1){
+        G.arrowType = kt; sfx('ui'); renderSpSelect();
+      } else {
+        toast('该特殊箭已用完', false);
+      }
+      e.preventDefault();
+      return;
+    }
     if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){
       e.preventDefault();
       if(k==='arrowup') KEYS.up = true; else if(k==='arrowdown') KEYS.down = true;
@@ -1735,10 +1853,12 @@ function onHit(arrow, target, r){
       return;   // 不记分 不上报 服务器双重校验
     }
     if(G.variant === 'precision' && ring < 10){
-      /* 精准挑战: 只有靶心得分, 边缘命中扣箭 */
-      banner('🎯 边缘命中不计分 · 扣 1 箭', '只有靶心（10环）得分');
-      var au2 = AUTH.user; if(au2){ au2.arrows = Math.max(0, (au2.arrows|0) - 1); updateArrowUI(); }
-      try { api('/api/arrow/use', { method:'POST', body:{} }); } catch(e){}
+      /* 精准挑战: 只有靶心得分, 边缘命中扣箭(连续脱靶阶梯递增 −1…−5, 命中靶心清零) */
+      G.missCombo = (G.missCombo|0) + 1;
+      var pd = Math.min(G.missCombo|0, 5);
+      banner('🎯 边缘命中不计分', '连脱 x' + G.missCombo + ' · 扣 ' + pd + ' 箭 · 命中靶心清零');
+      var au2 = AUTH.user; if(au2){ au2.arrows = Math.max(0, (au2.arrows|0) - pd); updateArrowUI(); }
+      try { api('/api/arrow/use', { method:'POST', body:{ count: pd } }); } catch(e){}
       sfx('miss');
       G.combo = 0; G.lastHitT = 0;   // 边缘命中重置连击
       return;
@@ -1747,14 +1867,17 @@ function onHit(arrow, target, r){
     if(G.variant === 'precision' || G.variant === 'endless'){
       if(NOW() - (G.lastHitT||0) <= 6) G.combo = (G.combo|0) + 1; else G.combo = 1;
       G.lastHitT = NOW();
+      G.missCombo = 0;   // 计分命中清掉连脱计数
       if(G.combo > 1) pts += Math.min(G.combo - 1, 5);
     }
     G.roundScore = (G.roundScore|0) + pts;   // 本局得分（结算/排行榜/个人最佳都用它）
     addScore(G.session, pts);   // 中心服务器记账（账号总积分）
-    if(G.variant === 'endless'){   // 无限模式: 每次命中提速+瞬移, 实时刷新个人最佳
-      G.mvSpeed = Math.min(8, G.mvSpeed + 0.12);
-      target.x = (Math.random() - 0.5) * 70;
-      target.dx = Math.random() < 0.5 ? 1 : -1;
+    if(G.variant === 'endless'){   // 无限模式: 命中提速+瞬移(房主权威), 个人最佳各记各的
+      if(G.mode !== 'multi' || NET.isHost){
+        G.mvSpeed = Math.min(8, G.mvSpeed + 0.12);
+        target.x = (Math.random() - 0.5) * 70;
+        target.dx = Math.random() < 0.5 ? 1 : -1;
+      }
       if(G.roundScore > ((G.best||{}).endless|0)){
         if(!G.best) G.best = {};
         G.best.endless = G.roundScore;
@@ -1834,7 +1957,8 @@ function loop(){
       var best = (G.best||{}).rush30|0;
       if(rs > best){ best = rs; try{ api('/api/best', { method:'POST', body:{ variant:'rush30', score: best } }); }catch(e){} }
       if(G.mode === 'multi'){
-        banner('⏱ 时间到！', '本局 ' + rs + ' 分 · 房主在暂停菜单可换模式再开一局');
+        banner('⏱ 时间到！', '本局 ' + rs + ' 分 · 结算见排行榜');
+        showRushResult();   // 结算页: 全房玩家本局得分排名
       } else {
         banner('⏱ 时间到！', '本局总分 ' + rs + ' 分 · 个人最佳 ' + best + ' 分');
         setTimeout(function(){ try { exitGame(); } catch(e) {} }, 2500);
@@ -1846,12 +1970,15 @@ function loop(){
     }
   }
   if(G.variant === 'endless' && G.targets && G.targets[0]){
-    /* 只有一个共用靶: 全场横扫(与单人一致) */
+    /* 只有一个共用靶; 多人下房主权威模拟, 房员本地同速模拟+向房主位置轻校正, 两端看到基本同一位置 */
     var mtg = G.targets[0];
     if(mtg.dx === undefined){ mtg.dx = 1; }
     mtg.x += mtg.dx * G.mvSpeed * dt;
     if(mtg.x > 38){ mtg.x = 38; mtg.dx = -1; }
     if(mtg.x < -38){ mtg.x = -38; mtg.dx = 1; }
+    if(G.mode === 'multi' && !NET.isHost && mtg.rx !== undefined){
+      mtg.x += (mtg.rx - mtg.x) * Math.min(1, dt * 5);
+    }
     mtg.group.position.x = mtg.x;
     var mt3 = $('mode-timer');
     if(mt3) mt3.textContent = '♾️ 得分: ' + (G.roundScore|0) + ((G.combo|0)>1 ? ' · 连击x'+G.combo : '') + ' · 速度: ' + G.mvSpeed.toFixed(1);
@@ -1902,7 +2029,20 @@ function loop(){
     if(hitAny) continue;
     if(m.position.y <= 0.04){          // 落地
       m.position.y = 0.04; a.stuck = true; a.stickT = t;
-      if(a.owner==='me'){ sfx('miss'); toast('脱靶了！抬高一点再试试', false); netSend({t:'miss'}); if(G.variant==='precision'||G.variant==='endless'){ G.combo = 0; G.lastHitT = 0; } }
+      if(a.owner==='me'){
+        sfx('miss'); netSend({t:'miss'});
+        if(G.variant==='precision'||G.variant==='endless'){ G.combo = 0; G.lastHitT = 0; }
+        /* 无限模式: 脱靶扣箭, 连续脱靶阶梯递增(−1,−2,−3…最多−5), 命中清零 */
+        if(G.variant === 'endless'){
+          G.missCombo = (G.missCombo|0) + 1;
+          var md = Math.min(G.missCombo|0, 5);
+          var au3 = AUTH.user; if(au3){ au3.arrows = Math.max(0, (au3.arrows|0) - md); updateArrowUI(); }
+          try { api('/api/arrow/use', { method:'POST', body:{ count: md } }); } catch(e){}
+          toast('脱靶！连脱 x' + G.missCombo + ' · 扣 ' + md + ' 箭', false);
+        } else {
+          toast('脱靶了！抬高一点再试试', false);
+        }
+      }
       continue;
     }
     a.life += dt;
@@ -1977,10 +2117,16 @@ function loop(){
   /* 姿态同步（10Hz 采样 + 无变化跳过; WS 转发不计量请求数, 客户端有插值补帧） */
   if(G.mode==='multi' && t - G.lastPose > 0.1){
     var pose = { yaw: +G.yaw.toFixed(3), draw: +G.draw.toFixed(3), x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2), hidden: (G.hiddenUntil||0) > t };
+    /* 无限模式(房主权威): 共用靶的位置/方向/速度随姿态广播, 全房看到同一位置 */
+    if(G.variant === 'endless' && NET.isHost && G.targets && G.targets[0]){
+      pose.tx = +G.targets[0].x.toFixed(2);
+      pose.td = G.targets[0].dx || 1;
+      pose.tv = +G.mvSpeed.toFixed(2);
+    }
     var last = G.lastPoseSent;
-    if(!last || last.yaw !== pose.yaw || last.draw !== pose.draw || last.x !== pose.x || last.y !== pose.y || last.z !== pose.z || last.hidden !== pose.hidden){
+    if(!last || last.yaw !== pose.yaw || last.draw !== pose.draw || last.x !== pose.x || last.y !== pose.y || last.z !== pose.z || last.hidden !== pose.hidden || last.tx !== pose.tx || last.td !== pose.td || last.tv !== pose.tv){
       G.lastPoseSent = pose; G.lastPose = t;
-      netSend({t:'pose', yaw: pose.yaw, draw: pose.draw, x: pose.x, y: pose.y, z: pose.z, hidden: pose.hidden});
+      netSend({t:'pose', yaw: pose.yaw, draw: pose.draw, x: pose.x, y: pose.y, z: pose.z, hidden: pose.hidden, tx: pose.tx, td: pose.td, tv: pose.tv});
     }
   }
 
@@ -1998,7 +2144,7 @@ function genCode(){
 }
 function netSend(obj){ try{ if(NET.ws && NET.ws.readyState===1) NET.ws.send(JSON.stringify({t:'g', d:obj})); }catch(e){} }
 function cleanupNet(){
-  try{ if(NET.ws){ NET.ws.onclose = null; NET.ws.close(); } }catch(e){}
+  try{ if(NET.ws){ NET.ws.onclose = null; try{ NET.ws.send(JSON.stringify({t:'leave'})); }catch(e){} NET.ws.close(); } }catch(e){}
   try{ if(NET.conn) NET.conn.close(); }catch(e){}
   try{ if(NET.peer) NET.peer.destroy(); }catch(e){}
   NET.ws = NET.peer = NET.conn = null; NET.isHost=false; NET.roomCode=''; NET.foeName=''; NET.joined=false;
@@ -2042,12 +2188,13 @@ function hostRoom(setup, isRetry){
       $('room-tag').title = '点击复制房间码';
     }
     else if(d.t === 'mode'){ applyGameMode(d.mode); }   // 房主换了模式
+    else if(d.t === 'round-start'){ startRushRound(); } // 服务器: 人齐开跑(狂射)
     else if(d.t === 'g'){ handleGameData(d.d); }
     else if(d.t === 'peer-joined'){ onPeerJoined(d); }   // 有人进房
     else if(d.t === 'peer-left'){ onPeerLeft(d); }
   };
   ws.onclose = ()=>{
-    if(NET.joined){ onRoomLost(); return; }    // 对局中断线
+    if(NET.roomCode){ hostReconnect(); return; }   // 房间已建好: 原地重连(认领原房码)
     NET.retry = (NET.retry||0) + 1;           // 建房阶段断线：自动重试
     if(NET.retry <= 3){
       toast('网络波动，正在自动重连(' + NET.retry + '/3)…');
@@ -2437,6 +2584,10 @@ function joinRoom(code, pass, isRetry){
       NET.foeName = (d.foeName||'房主').slice(0,16);
       G.foeName = displayName(NET.foeName);
       if(d.mode) applyGameMode(d.mode);     // 房间当前模式
+      if(d.roundLeft !== undefined && d.roundLeft > 0){
+        G.deadline = NOW() + Math.min(30, d.roundLeft);   // 中途加入: 跟上当前这局的剩余时间
+        G.rushEnded = false;
+      }
       ensureAllSteves();
       updateScoreboard();
       banner(`已加入房间 ${code}！`, `房内共 ${G.roomPlayers.length} 人，各自的标靶在正前方`);
@@ -2444,13 +2595,22 @@ function joinRoom(code, pass, isRetry){
       return;
     }
     if(d.t === 'mode'){ applyGameMode(d.mode); }   // 房主换了模式
+    if(d.t === 'round-start'){ startRushRound(); } // 服务器: 人齐开跑(狂射)
     if(d.t === 'peer-joined'){ onPeerJoined(d); }
     if(d.t === 'peer-left'){ onPeerLeft(d); }
     else if(d.t === 'room-closed'){ toast('房主已解散房间', false); exitGame(); }
     else if(d.t === 'g'){ handleGameData(d.d); }
   };
   ws.onclose = ()=>{
-    if(NET.joined){ onRoomLost(); return; }
+    if(NET.joined){                            // 对局中断线: 自动重新加入原房间
+      NET.retry = (NET.retry||0) + 1;
+      if(NET.retry <= 5){
+        toast('网络波动，正在重连(' + NET.retry + '/5)…');
+        setTimeout(()=>joinRoom(NET.roomCode, NET.joinPass, true), 1200 + NET.retry*600); return;
+      }
+      toast('重连失败（已尝试5次），请检查网络后刷新页面重试', false);
+      onRoomLost(); return;
+    }
     NET.retry = (NET.retry||0) + 1;
     if(NET.retry <= 3){
       toast('网络波动，正在自动重连(' + NET.retry + '/3)…');
@@ -2576,6 +2736,12 @@ function handleGameData(d){
     var buf = G.foeBuf[from] || (G.foeBuf[from] = []);
     buf.push({ t: NOW(), yaw: fp.yaw, draw: fp.draw, x: fp.x, y: fp.y, z: fp.z });
     if(buf.length > 8) buf.shift();
+    /* 房主广播的共用靶位(无限模式): 记录目标位置/方向/速度 */
+    if(d.tx !== undefined && G.targets && G.targets[0]){
+      G.targets[0].rx = d.tx;
+      G.targets[0].dx = d.td || 1;
+      if(d.tv !== undefined) G.mvSpeed = Math.max(1.4, Math.min(8, d.tv));
+    }
   }
   else if(d.t === 'leave'){ if(G.steves[from]){ scene.remove(G.steves[from].group); delete G.steves[from]; } if(G.foeBuf) delete G.foeBuf[from]; delete G.foePose[from]; updateScoreboard(); }
   else if(d.t === 'invite-fail'){ toast('邀请失败：' + (d.reason || '对方不在线'), false); }

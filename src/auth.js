@@ -101,6 +101,14 @@ async function dsDel(env, name) {
     return r.ok;
   } catch (e) { return false; }
 }
+/* 浅合并修改(不动未提及字段, 如皮肤/私信) */
+async function dsPatch(env, name, patch) {
+  if (!env.DATA_URL) return false;
+  try {
+    const r = await fetch(await dsUrl(env, name), { method: 'PATCH', headers: { 'X-Data-Token': env.DATA_TOKEN || '', 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+    return r.ok;
+  } catch (e) { return false; }
+}
 
 /* ---------------- 按用户 KV 存取（写入合并缓冲） ---------------- */
 const UKEY = (name) => 'u:' + name;
@@ -172,5 +180,5 @@ function pubUser(u) {
 export {
   ADMIN_NAME, ADMIN_DEFAULT_PASS, TOKEN_TTL,
   b64u, hex, hashPass, getDb, putDb, getSecret, hmacSign,
-  issueToken, userFromToken, pubUser, nameToId, readUser, writeUser, delUser, flushDirty, dsGet, dsPut,
+  issueToken, userFromToken, pubUser, nameToId, readUser, writeUser, delUser, flushDirty, dsGet, dsPut, dsPatch,
 };

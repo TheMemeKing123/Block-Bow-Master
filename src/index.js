@@ -2,7 +2,7 @@
    账号数据: KV 按用户分键存储（纯 Worker+KV, 不消耗 DO 额度）
    多人房间: Durable Object 仅承载实时对局转发 */
 import { RoomDO } from './do.js';
-import { ADMIN_NAME, hex, hashPass, nameToId, getSecret, hmacSign, issueToken, userFromToken, pubUser, readUser, writeUser, delUser, flushDirty } from './auth.js';
+import { ADMIN_NAME, hex, hashPass, nameToId, getSecret, hmacSign, issueToken, userFromToken, pubUser, readUser, writeUser, delUser, flushDirty, dsGet, dsPut, dsPatch } from './auth.js';
 export { RoomDO };
 
 /* ---------------- 工具 ---------------- */
@@ -29,6 +29,25 @@ async function notifyUser(env, to, payload) {
     const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
     await stub.fetch('https://do/notify', { method: 'POST', body: JSON.stringify({ to, payload }) });
   } catch (e) {}
+}
+
+/* 全量账号列表: 主存(数据服务 __index)优先, KV u: 键兜底 */
+async function listAllUsers(env) {
+  try {
+    const base = (env.DATA_URL || '').replace(/\/+$/, '');
+    if (base) {
+      const r = await fetch(base + '/__index', { headers: { 'X-Data-Token': env.DATA_TOKEN || '' }, cf: { cacheTtl: 0 } });
+      if (r.ok) return await r.json();
+    }
+  } catch (e) {}
+  const out = {};
+  var cursor = undefined;
+  do {
+    const page = await env.BOW_KV.list({ prefix: 'u:', cursor });
+    page.keys.forEach(function(k){ out[k.name.slice(2)] = {}; });
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return out;
 }
 
 /* 按用户 KV 存取: readUser/writeUser/delUser 来自 auth.js */
@@ -174,7 +193,8 @@ async function apiBody(request, env, url) {
     if (path === '/api/arrow/use' && request.method === 'POST') {
       const u = await readUser(env, me.name);
       if (!u) return json({ error: '账号不存在' }, 400);
-      u.arrows = Math.max(0, (u.arrows|0) - 1);
+      const n = Math.max(1, Math.min(10, (body.count | 0) || 1));   // 支持批量扣箭(脱靶连击惩罚)
+      u.arrows = Math.max(0, (u.arrows|0) - n);
       await writeUser(env, me.name, u);
       return json({ arrows: u.arrows|0 });
     }
@@ -237,12 +257,8 @@ async function apiBody(request, env, url) {
       return json({ ok: true });
     }
     if (path === '/api/users/public' && request.method === 'GET') {
-      let cursor = undefined; const names = [];
-      do {
-        const page = await env.BOW_KV.list({ prefix: 'u:', cursor });
-        page.keys.forEach(function(k){ var n = k.name.slice(2); if (n && NAME_RE.test(n) === false) names.push(n); });
-        cursor = page.list_complete ? undefined : page.cursor;
-      } while (cursor);
+      const all = await listAllUsers(env);
+      const names = Object.keys(all).filter(function(n){ return n && NAME_RE.test(n) === false; });
       return json({ names });
     }
     if (path === '/api/online' && request.method === 'POST') {
@@ -362,20 +378,14 @@ async function apiBody(request, env, url) {
 
       if (path === '/api/admin/users' && request.method === 'GET') {
         const online = await presenceList(env);
-        var cursor = undefined; var users = [];
-        do {
-          const page = await env.BOW_KV.list({ prefix: 'u:', cursor });
-          page.keys.forEach(function(k){
-            var nm = k.name.slice(2);
-            users.push({ name: nm });
-          });
-          cursor = page.list_complete ? undefined : page.cursor;
-        } while (cursor);
+        const all = await listAllUsers(env);
         var pub = [];
-        for (var i = 0; i < users.length; i++) {
-          var ru = await readUser(env, users[i].name);
+        for (var nm in all) {
+          var ru = all[nm];
           if (!ru || ru.deleted) continue;
-          pub.push(pubUser({ ...ru, _name: users[i].name, _online: online.includes(users[i].name) }));
+          if (!ru.reg && !ru.arrows) { ru = (await readUser(env, nm)) || ru; }   // KV兜底空壳: 单独补读
+          if (!ru || ru.deleted) continue;
+          pub.push(pubUser({ ...ru, _name: nm, _online: online.includes(nm) }));
         }
         pub.sort(function(a, b){ return b.score - a.score; });
         return json({ users: pub });
@@ -451,16 +461,13 @@ async function apiBody(request, env, url) {
           return json({ ok: true });
         }
         if (body.all) {
-          var allNames = [];
-          cursor = undefined;
-          do {
-            const page = await env.BOW_KV.list({ prefix: 'u:', cursor });
-            page.keys.forEach(function(k){ allNames.push(k.name.slice(2)); });
-            cursor = page.list_complete ? undefined : page.cursor;
-          } while (cursor);
-          for (var ai = 0; ai < allNames.length; ai++) {
-            var au = await readUser(env, allNames[ai]);
-            if (au && !isDev(au)) { au.score = Math.max(0, (au.score||0) + d2); await writeUser(env, allNames[ai], au); }
+          /* 全体加分: 用 __index 的名字+当前分, PATCH 只改 score 字段(不读不写整记录) */
+          const allAdj = await listAllUsers(env);
+          for (var nm2 in allAdj) {
+            var au = allAdj[nm2] || {};
+            if (au.isDeveloper) continue;
+            var ns = Math.max(0, (au.score | 0) + d2);
+            try { await dsPatch(env, nm2, { score: ns }); } catch (e) {}
           }
           return json({ ok: true });
         }
