@@ -32,7 +32,7 @@ jobs:
           git diff origin/${{ github.base_ref }}...HEAD > /tmp/pr.diff || true
           head -c 60000 /tmp/pr.diff > /tmp/pr_trimmed.diff
 
-      - name: 调用 AI 审查（经 Worker 代理，失败自动重试）
+      - name: 调用 AI 审查（直连美国中继，失败自动重试）
         id: review
         if: steps.guard.outputs.VERDICT != 'skipped'
         env:
@@ -60,7 +60,6 @@ jobs:
           for attempt in range(4):
             try:
               req = urllib.request.Request('https://vpn.xiaopi.ink/ai/zen/go/v1/chat/completions', data=json.dumps(payload).encode(), headers={
-              req = urllib.request.Request('https://vpn.xiaopi.ink/ai/zen/go/v1/chat/completions', data=json.dumps(payload).encode(), headers={
                 'Content-Type': 'application/json',
                 'X-Data-Token': os.environ['AI_PROXY_TOKEN']
               })
@@ -76,7 +75,7 @@ jobs:
             except urllib.error.HTTPError as e:
               last = 'HTTP ' + str(e.code) + ' ' + e.read().decode(errors='ignore')[:150]
             except Exception as e:
-              last = str(e)[:120]
+              last = str(e)[:150]
             time.sleep(6)
           if review is None:
             review = '> ⚠️ AI 审查调用失败（已重试4次）：' + last
