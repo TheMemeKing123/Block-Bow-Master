@@ -32,7 +32,7 @@ jobs:
           git diff origin/${{ github.base_ref }}...HEAD > /tmp/pr.diff || true
           head -c 60000 /tmp/pr.diff > /tmp/pr_trimmed.diff
 
-      - name: 调用 AI 审查（经游戏 Worker 代理）
+      - name: 调用 AI 审查（经 Worker 代理，失败自动重试）
         id: review
         if: steps.guard.outputs.VERDICT != 'skipped'
         env:
@@ -44,7 +44,7 @@ jobs:
             exit 0
           fi
           python3 - <<'PY'
-          import json, os, urllib.request, urllib.error
+          import json, os, time, urllib.request, urllib.error
           diff = open('/tmp/pr_trimmed.diff', encoding='utf-8', errors='ignore').read()
           payload = {
             "model": "glm-5.3-flash",
@@ -55,21 +55,29 @@ jobs:
             "temperature": 0.1,
             "max_tokens": 4000
           }
-          req = urllib.request.Request('https://game.xiaopi.ink/api/ai-proxy', data=json.dumps(payload).encode(), headers={
-            'Content-Type': 'application/json',
-            'X-Internal-Token': os.environ['AI_PROXY_TOKEN']
-          })
-          verdict = 'rejected'
-          try:
-            with urllib.request.urlopen(req, timeout=240) as r:
-                d = json.loads(r.read().decode())
-            review = (d.get('choices') or [{}])[0].get('message', {}).get('content') or ''
+          review = None
+          last = ''
+          for attempt in range(4):
+            try:
+              req = urllib.request.Request('https://game.xiaopi.ink/api/ai-proxy', data=json.dumps(payload).encode(), headers={
+                'Content-Type': 'application/json',
+                'X-Internal-Token': os.environ['AI_PROXY_TOKEN']
+              })
+              with urllib.request.urlopen(req, timeout=240) as r:
+                  d = json.loads(r.read().decode())
+              review = (d.get('choices') or [{}])[0].get('message', {}).get('content') or ''
+              if review.strip(): break
+            except urllib.error.HTTPError as e:
+              last = 'HTTP ' + str(e.code) + ' ' + e.read().decode(errors='ignore')[:120]
+            except Exception as e:
+              last = str(e)[:120]
+            time.sleep(6)
+          if review is None:
+            review = '> ⚠️ AI 审查调用失败（已重试4次）：' + last
+            verdict = 'rejected'
+          else:
             first = review.strip().splitlines()[0].strip() if review.strip() else ''
             verdict = 'passed' if (('通过' in first) and ('不通过' not in first)) else 'rejected'
-          except urllib.error.HTTPError as e:
-            review = '> ⚠️ AI 审查接口返回错误: HTTP ' + str(e.code) + ' ' + e.read().decode(errors='ignore')[:200]
-          except Exception as e:
-            review = '> ⚠️ AI 审查调用失败: ' + str(e)[:200]
           print('verdict=' + verdict)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write('verdict=' + verdict + '\n')
