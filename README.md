@@ -58,3 +58,5 @@ public/index.html 前端（和 v4.0 相同，不用改）
 © 2026 xiaopi668 · **保留所有权利 / All Rights Reserved**
 
 本项目为专有软件，未经作者书面授权不得复制、修改、分发或商用。详见 [LICENSE](LICENSE)。
+
+- 2026-09-13: AI 审核流水线联调通过（中继 + workers 出站链路修复）
