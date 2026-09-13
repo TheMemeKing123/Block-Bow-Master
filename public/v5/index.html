@@ -1790,10 +1790,14 @@ function loop(){
     s.group.visible = !(pp && pp.hidden);   // 影分: 对方隐身时隐藏其模型
   }
 
-  /* 姿态同步（节流） */
-  if(G.mode==='multi' && t - G.lastPose > 0.1){
-    G.lastPose = t;
-    netSend({t:'pose', yaw:G.yaw, draw:G.draw, x:camera.position.x, y:camera.position.y, z:camera.position.z, hidden:(G.hiddenUntil||0) > t});
+  /* 姿态同步（0.25s 节流 + 无变化跳过: 省 DO 请求额度） */
+  if(G.mode==='multi' && t - G.lastPose > 0.25){
+    var pose = { yaw: +G.yaw.toFixed(2), draw: +G.draw.toFixed(2), x: +camera.position.x.toFixed(1), y: +camera.position.y.toFixed(1), z: +camera.position.z.toFixed(1), hidden: (G.hiddenUntil||0) > t };
+    var last = G.lastPoseSent;
+    if(!last || last.yaw !== pose.yaw || last.draw !== pose.draw || last.x !== pose.x || last.y !== pose.y || last.z !== pose.z || last.hidden !== pose.hidden){
+      G.lastPoseSent = pose; G.lastPose = t;
+      netSend({t:'pose', yaw: pose.yaw, draw: pose.draw, x: pose.x, y: pose.y, z: pose.z, hidden: pose.hidden});
+    }
   }
 
   renderer.render(scene, camera);
