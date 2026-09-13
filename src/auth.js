@@ -74,26 +74,54 @@ async function userFromToken(env, token) {
   } catch (e) { return null; }
 }
 
-/* ---------------- 按用户 KV 存取 ---------------- */
+/* ---------------- 按用户 KV 存取（写入合并缓冲） ---------------- */
 const UKEY = (name) => 'u:' + name;
+var userCache = {};          // 内存缓存(所有已读/已写用户)
+var dirtyUsers = new Set();  // 待刷写的用户名
+var flushTimer = null;
+
+function cacheGet(name) { return userCache[name] || null; }
+function cachePut(name, rec) { userCache[name] = rec; }
+
 async function readUser(env, name) {
-  try { const v = await env.BOW_KV.get(UKEY(name)); if (v) return JSON.parse(v); } catch (e) {}
-  /* 旧整库迁移: 首次访问时拆出独立键 */
+  /* 内存缓存最优先(最新) */
+  if (userCache[name] !== undefined) return userCache[name];
+  try { const v = await env.BOW_KV.get(UKEY(name)); if (v) { var rec = JSON.parse(v); cachePut(name, rec); return rec; } } catch (e) {}
+  /* 旧整库迁移 */
   try {
-    const blob = JSON.parse((await env.BOW_KV.get('db')) || 'null');
+    var blob = JSON.parse((await env.BOW_KV.get('db')) || 'null');
     if (blob && blob[name]) {
-      const rec = blob[name];
-      try { await env.BOW_KV.put(UKEY(name), JSON.stringify(rec)); } catch (e) {}
-      return rec;
+      var rec2 = blob[name];
+      cachePut(name, rec2);
+      try { await env.BOW_KV.put(UKEY(name), JSON.stringify(rec2)); } catch (e) {}
+      return rec2;
     }
   } catch (e) {}
   return null;
 }
+/* 写入: 更新内存缓存, 标记 dirty; 每 20 秒或手动触发时批量刷 KV */
+function markDirty(name, rec) {
+  userCache[name] = rec;
+  dirtyUsers[name] = true;
+}
+async function flushDirty(env) {
+  var keys = Object.keys(dirtyUsers);
+  if (!keys.length) return;
+  for (var i = 0; i < keys.length; i++) {
+    var nm = keys[i];
+    var rec = userCache[nm];
+    if (rec) { try { await env.BOW_KV.put(UKEY(nm), JSON.stringify(rec)); } catch (e) {} }
+    delete dirtyUsers[nm];
+  }
+}
 async function writeUser(env, name, rec) {
-  await env.BOW_KV.put(UKEY(name), JSON.stringify(rec));
+  cachePut(name, rec);
+  dirtyUsers[name] = true;
+  if (env) globalThis.__bowEnv = env;
 }
 async function delUser(env, name) {
-  await env.BOW_KV.delete(UKEY(name));
+  delete userCache[name];
+  try { await env.BOW_KV.delete(UKEY(name)); } catch (e) {}
 }
 
 function pubUser(u) {
@@ -109,5 +137,5 @@ function pubUser(u) {
 export {
   ADMIN_NAME, ADMIN_DEFAULT_PASS, TOKEN_TTL,
   b64u, hex, hashPass, getDb, putDb, getSecret, hmacSign,
-  issueToken, userFromToken, pubUser, nameToId, readUser, writeUser, delUser,
+  issueToken, userFromToken, pubUser, nameToId, readUser, writeUser, delUser, flushDirty,
 };

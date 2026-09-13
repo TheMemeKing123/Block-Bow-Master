@@ -2,7 +2,7 @@
    账号数据: KV 按用户分键存储（纯 Worker+KV, 不消耗 DO 额度）
    多人房间: Durable Object 仅承载实时对局转发 */
 import { RoomDO } from './do.js';
-import { ADMIN_NAME, hex, hashPass, nameToId, getSecret, hmacSign, issueToken, userFromToken, pubUser, readUser, writeUser, delUser } from './auth.js';
+import { ADMIN_NAME, hex, hashPass, nameToId, getSecret, hmacSign, issueToken, userFromToken, pubUser, readUser, writeUser, delUser, flushDirty } from './auth.js';
 export { RoomDO };
 
 /* ---------------- 工具 ---------------- */
@@ -59,6 +59,7 @@ export default {
       } catch (e) { return new Response('not found', { status: 404 }); }
     }
 
+    await flushDirty(env);   // 每次请求先刷掉上次积攒的脏写入
     const body = await readBody(request);
     const token = request.headers.get('X-User-Token');
     const me = await userFromToken(env, token);
