@@ -107,6 +107,7 @@ function pubUser(u) {
   return {
     username: u._name, score: u.score || 0, banned: !!u.banned,
     isAdmin: !!u.isAdmin, isDeveloper: !!u.isDeveloper, arrows: (u.arrows === undefined ? 100 : (u.arrows | 0)),
+    sp: u.sp || {},
     reg: u.reg || 0, lastLogin: u.lastLogin || 0, online: u._online || false,
   };
 }

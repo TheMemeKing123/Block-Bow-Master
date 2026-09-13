@@ -37,6 +37,9 @@ export class RoomDO {
     await this.persistDb();
   }
 
+  async refreshDb() {
+    try { const d = await this.state.storage.get('db'); if (d) this.db = d; } catch (e) {}
+  }
   async syncUsersFromKV(needName) {
     for (let i = 0; i < 3; i++) {
       try {
@@ -83,7 +86,7 @@ export class RoomDO {
       return new Response(JSON.stringify({ players: out }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/audit-score' && request.method === 'POST') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const b = await request.json();
       const name = b.name, delta = b.delta, fp = b.fp;
       if (!this.db[name]) { try { await this.syncUsersFromKV(name); } catch (e) {} }
@@ -120,7 +123,7 @@ export class RoomDO {
       return new Response(JSON.stringify({ score: u.score }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/arrow/use' && request.method === 'POST') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const b = await request.json();
       if (!this.db[b.name]) { try { await this.syncUsersFromKV(b.name); } catch (e) {} }
       const u = this.db[b.name];
@@ -130,19 +133,23 @@ export class RoomDO {
       return new Response(JSON.stringify({ arrows: u.arrows }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/user-score') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const n = String(url.searchParams.get('name') || '').slice(0, 16);
+      if (n && !this.db[n]) { try { await this.syncUsersFromKV(n); } catch (e) {} }
       const u = this.db[n];
-      return new Response(JSON.stringify({ score: u ? (u.score|0) : null, arrows: u ? (u.arrows|0) : null }), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ score: u ? (u.score|0) : null, arrows: u ? (u.arrows|0) : null, sp: u ? (u.sp || {}) : null }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/dbdbg') {
       const mem = Object.keys(this.db || {});
       let st = null, stErr = '';
       try { const v = await this.state.storage.get('db'); st = v ? Object.keys(v) : null; } catch (e) { stErr = String(e).slice(0, 100); }
-      return new Response(JSON.stringify({ memKeys: mem, stateKeys: st, stErr, hasPepper: !!this.env.SECRET_PEPPER }), { headers: { 'Content-Type': 'application/json' } });
+      var probeWrite = null, probeRead = null;
+      try { await this.state.storage.put('__probe', { t: Date.now() }); probeWrite = 'ok'; } catch (e) { probeWrite = 'ERR ' + String(e).slice(0, 80); }
+      try { const v = await this.state.storage.get('__probe'); probeRead = v ? ('ok t=' + v.t) : 'EMPTY'; } catch (e) { probeRead = 'ERR ' + String(e).slice(0, 80); }
+      return new Response(JSON.stringify({ memKeys: mem, stateKeys: st, stErr, hasPepper: !!this.env.SECRET_PEPPER, probeWrite: probeWrite, probeRead: probeRead }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/user-check') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const want = String(url.searchParams.get('userId') || '');
       const byName = String(url.searchParams.get('name') || '');
       const scan = async () => {
@@ -164,7 +171,7 @@ export class RoomDO {
       return new Response(JSON.stringify({ exists: !!this.db[n] }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/user-create' && request.method === 'POST') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const b = await request.json();
       const name = String(b.name || '').slice(0, 16);
       if (!name) return new Response(JSON.stringify({ error: '无用户名' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -180,7 +187,7 @@ export class RoomDO {
     }
     const SP_PRICES = { track: 40, split: 20, ice: 10, boom: 25, shadow: 30 };
     if (url.pathname === '/sp-buy' && request.method === 'POST') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const b = await request.json();
       const type = String(b.type || '');
       if (!SP_PRICES[type]) return new Response(JSON.stringify({ error: '未知箭种' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -197,7 +204,7 @@ export class RoomDO {
       return new Response(JSON.stringify({ ok: true, score: u.score|0, left: u.sp[type]|0 }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/sp-use' && request.method === 'POST') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const b = await request.json();
       const type = String(b.type || '');
       if (!SP_PRICES[type]) return new Response(JSON.stringify({ error: '未知箭种' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -211,7 +218,7 @@ export class RoomDO {
       return new Response(JSON.stringify({ left: u.sp[type]|0 }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/gift' && request.method === 'POST') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const b = await request.json();
       const from = String(b.from || '').slice(0, 16);
       const to = String(b.to || '').slice(0, 16);
@@ -236,7 +243,7 @@ export class RoomDO {
       return new Response(JSON.stringify({ ok: true, arrows: uf.arrows }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/shop/buy' && request.method === 'POST') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const b = await request.json();
       if (!this.db[b.name]) { try { await this.syncUsersFromKV(b.name); } catch (e) {} }
       const u = this.db[b.name];
@@ -264,7 +271,7 @@ export class RoomDO {
       return new Response('ok');
     }
     if (url.pathname === '/friend-op' && request.method === 'POST') {
-      await this.ensure();
+      await this.ensure(); await this.refreshDb();
       const b = await request.json();
       const name = b.name, other = b.other, act = b.act;
       const f = (n) => { const u = this.db[n] || (this.db[n] = { score:0, salt:'', pass:'', banned:false, isAdmin:false, isDeveloper:false, reg:0, lastLogin:0 }); if (!u.friends) u.friends = []; if (!u.requests) u.requests = []; if (!u.sent) u.sent = []; return u; };
@@ -516,8 +523,12 @@ export class RoomDO {
     try { await this.env.BOW_KV.put('db', bodyJson); } catch (e) {}
   }
   async persistDb() {
+    try {
+      await this.state.storage.put('db', this.db);                          // 权威持久化
+      await this.state.storage.put('dbVer', { t: Date.now() });             // 版本标记
+    } catch (e) {}
+    try { await this.env.BOW_KV.put('db', JSON.stringify(this.db)); } catch (e) {}   // 同步 KV 副本
     this.s3ScheduleSave();   // 尽力而为的异地备份(可失败)
-    try { await this.state.storage.put('db', this.db); } catch (e) {}   // 权威持久化
   }
   s3ScheduleSave() {
     if (this._s3T) return;
