@@ -52,10 +52,8 @@ async function getSecret(env) {
 async function issueToken(env, name) {
   const sec = await getSecret(env);
   const userId = await nameToId(name);
-  const payload = b64u(enc.encode(JSON.stringify({ userId, exp: Date.now() + TOKEN_TTL })));
-  const t = payload + '.' + await hmacSign(sec, payload);
-  console.log('[token] issue secret=', sec.slice(0,10), 'userId=', userId);
-  return t;
+  const payload = b64u(enc.encode(JSON.stringify({ userId, name, exp: Date.now() + TOKEN_TTL })));
+  return payload + '.' + await hmacSign(sec, payload);
 }
 async function userFromToken(env, token) {
   if (!token || typeof token !== 'string') return null;
@@ -64,45 +62,40 @@ async function userFromToken(env, token) {
   const head = token.slice(0, i), mac = token.slice(i + 1);
   const sec = await getSecret(env);
   const good = await hmacSign(sec, head);
-  if (mac !== good) { console.log('[auth] mac mismatch sec=', sec.slice(0,10)); return null; }
+  if (mac !== good) return null;
   try {
     const p = JSON.parse(dec.decode(bytesFromB64u(head)));
-    if (!p.userId || !p.exp || p.exp < Date.now()) { console.log('[auth] bad payload'); return null; }
-    let db = await getDb(env);
-    let f = null;
-    for (const [name, u] of Object.entries(db)) {
-      if (await nameToId(name) === p.userId) { f = { name, ...u }; break; }
-    }
-    /* 实例缓存可能滞后: 绕过缓存直读 KV, 找到新注册账号后刷新缓存 */
-    if (!f) {
-      try {
-        const fresh = JSON.parse((await env.BOW_KV.get('db')) || 'null');
-        if (fresh) {
-          for (const [name, u] of Object.entries(fresh)) {
-            if (await nameToId(name) === p.userId) { dbCache = fresh; f = { name, ...u }; break; }
-          }
-        }
-      } catch (e) {}
-    }
-    /* 仍找不到: 回源 DO 查询 */
-    if (!f) {
-      try {
-        const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
-        const r = await stub.fetch('https://do/user-check?userId=' + encodeURIComponent(p.userId));
-        if (r.ok) {
-          const d = await r.json();
-          if (d.name && d.user && !d.user.banned) {
-            try { const cur = await env.BOW_KV.get('db'); if (cur) dbCache = JSON.parse(cur); } catch (e) {}
-            return { name: d.name, ...d.user };
-          }
-        }
-      } catch (e) {}
-    }
-    if (f && f.banned) return null;
-    if (!f) console.log('[auth] userId not found in db');
-    return f;
+    if (!p.name || !p.exp || p.exp < Date.now()) return null;
+    if (await nameToId(p.name) !== p.userId) return null;   // 防伪造
+    const rec = await readUser(env, p.name);
+    if (!rec) return null;
+    if (rec.banned) return null;
+    return { name: p.name, ...rec };
   } catch (e) { return null; }
 }
+
+/* ---------------- 按用户 KV 存取 ---------------- */
+const UKEY = (name) => 'u:' + name;
+async function readUser(env, name) {
+  try { const v = await env.BOW_KV.get(UKEY(name)); if (v) return JSON.parse(v); } catch (e) {}
+  /* 旧整库迁移: 首次访问时拆出独立键 */
+  try {
+    const blob = JSON.parse((await env.BOW_KV.get('db')) || 'null');
+    if (blob && blob[name]) {
+      const rec = blob[name];
+      try { await env.BOW_KV.put(UKEY(name), JSON.stringify(rec)); } catch (e) {}
+      return rec;
+    }
+  } catch (e) {}
+  return null;
+}
+async function writeUser(env, name, rec) {
+  await env.BOW_KV.put(UKEY(name), JSON.stringify(rec));
+}
+async function delUser(env, name) {
+  await env.BOW_KV.delete(UKEY(name));
+}
+
 function pubUser(u) {
   return {
     username: u._name, score: u.score || 0, banned: !!u.banned,
@@ -115,5 +108,5 @@ function pubUser(u) {
 export {
   ADMIN_NAME, ADMIN_DEFAULT_PASS, TOKEN_TTL,
   b64u, hex, hashPass, getDb, putDb, getSecret, hmacSign,
-  issueToken, userFromToken, pubUser, nameToId,
+  issueToken, userFromToken, pubUser, nameToId, readUser, writeUser, delUser,
 };
