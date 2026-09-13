@@ -1238,9 +1238,10 @@ function startGame(mode){
 
   /* 靶 */
   const targets = [];
+  const mp = (mode==='multi') ? (Number(NET.roomSetup && NET.roomSetup.max) || 4) : 1;
   const session = getSession() || '玩家';
   if(mode === 'multi'){
-    for(let i = 0; i < 8; i++) targets.push(buildTarget(M, slotX(i, 8), 1.8, -22));   // 8个靶位(按站位)
+    for(let i = 0; i < mp; i++) targets.push(buildTarget(M, slotX(i, mp), 1.8, -22));   // 按房间人数mp生成标靶
   } else {
     targets.push(buildTarget(M, 0, 1.8, -22));
   }
@@ -1248,7 +1249,7 @@ function startGame(mode){
 
   /* 玩家站位 */
   const mySlot = 0;
-  const px = (mode==='multi') ? slotX(0, 2) : 0;
+  const px = (mode==='multi') ? slotX(0, mp) : 0;
   camera.position.set(px, 1.62, 8);
   camera.rotation.order = 'YXZ';
 
@@ -1763,6 +1764,7 @@ function hostRoom(setup, isRetry){
   cleanupNet();
   if(!isRetry) NET.retry = 0;
   NET.isHost = true; NET.roomSetup = setup;
+  NET.maxPlayers = (setup && setup.max) ? Number(setup.max) : 4;
   startGame('multi');       // 直接进入世界 等人不打断
   G.waiting = true;
   renderWaitPlayers([G.myName]);
