@@ -46,3 +46,5 @@ src/index.js      API + token + 路由
 src/do.js         RoomDO 房间服务器（WebSocket）
 public/index.html 前端（和 v4.0 相同，不用改）
 ```
+
+<!-- CI 测试标记 -->
