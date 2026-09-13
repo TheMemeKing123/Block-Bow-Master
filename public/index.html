@@ -298,7 +298,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     </div>
     <div data-page-node-id="Lpsm69udr1kjrlvCt1xpgG" id="hud">
     <div data-page-node-id="qggSZtsy9XUGqRZiOeT8S1" id="scoreboard"></div>
-    <div data-page-node-id="dSFIOYx1Je3LydiZ5hYiqD" id="topbar"><button id="btn-pause-touch" style="pointer-events:auto;cursor:pointer;padding:7px 14px;font-size:13px;font-family:inherit;color:#fff;border:2px solid #000;background:linear-gradient(#5a6b8b,#303c55);text-shadow:1px 1px 0 #333">⏸ 暂停</button><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="hud-arrow" style="background:rgba(0,0,0,.45);border:2px solid rgba(0,0,0,.75);padding:6px 12px;font-size:13px;text-shadow:1px 1px 0 #000;color:#9fd4ff">🪶 --</span><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="room-tag"></span><button data-page-node-id="Ew8MzHt6fvWQUqM0iFisxA" id="btn-exit"><!--pnid:H6WGWhhgnmqvXYgKCdfkat-->退出</button></div>
+    <div data-page-node-id="dSFIOYx1Je3LydiZ5hYiqD" id="topbar"><button id="btn-pause-touch" style="pointer-events:auto;cursor:pointer;padding:7px 14px;font-size:13px;font-family:inherit;color:#fff;border:2px solid #000;background:linear-gradient(#5a6b8b,#303c55);text-shadow:1px 1px 0 #333">⏸ 暂停</button><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="hud-arrow" style="background:rgba(0,0,0,.45);border:2px solid rgba(0,0,0,.75);padding:6px 12px;font-size:13px;text-shadow:1px 1px 0 #000;color:#9fd4ff">🪶 --</span><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="room-tag"></span><span id="mode-timer" style="display:none;background:rgba(0,0,0,.55);border:2px solid #ffb347;padding:6px 12px;font-size:14px;color:#ffb347;text-shadow:1px 1px 0 #000"></span><button data-page-node-id="Ew8MzHt6fvWQUqM0iFisxA" id="btn-exit"><!--pnid:H6WGWhhgnmqvXYgKCdfkat-->退出</button></div>
     <div id="sp-select"></div>
     <div data-page-node-id="EGq8y3GPBkwVWKhLbK04WA" id="crosshair"></div>
     <div class="overlay" id="wait-overlay">
@@ -417,6 +417,17 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
   <div id="invite-list" style="max-height:240px;overflow-y:auto"></div>
   <div style="margin-top:8px;color:#888;font-size:11px">灰色 = 不在线 · 仅在线好友能收到邀请</div>
 </div></div>
+<!-- 单人模式选择 --><div id="mode-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.65); z-index:60; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:340px;text-align:center">
+    <b style="font-size:16px">🎮 选择游戏模式</b>
+    <div style="margin-top:12px"></div>
+    <button class="mc-btn" data-mode="normal" style="width:100%;margin:6px 0">🎯 普通练习<br><span style="font-size:11px;color:#9fd4ff">静态标靶 · 随意练习</span></button>
+    <button class="mc-btn" data-mode="endless" style="width:100%;margin:6px 0">♾️ 无限模式<br><span style="font-size:11px;color:#9fd4ff">标靶越来越快 · 冲击最高分</span></button>
+    <button class="mc-btn" data-mode="precision" style="width:100%;margin:6px 0">🎯 精准挑战<br><span style="font-size:11px;color:#9fd4ff">只算靶心 · 打边缘扣箭</span></button>
+    <button class="mc-btn" data-mode="rush30" style="width:100%;margin:6px 0">⏱ 30秒狂射<br><span style="font-size:11px;color:#9fd4ff">限时狂射 · 比比谁分高</span></button>
+    <button class="mc-btn small" id="mode-cancel" style="margin-top:8px;min-width:100px">取消</button>
+    <div id="mode-best" style="margin-top:8px;color:#c9b48a;font-size:11px"></div>
+  </div></div>
+
 <!-- 商城弹窗 -->
 <div id="shop-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.65); z-index:60; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:340px;text-align:left">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -922,7 +933,17 @@ $('btn-logout').onclick = ()=>{
   clearAuth(); clearSession();
   show('screen-login'); sfx('ui'); toast('已退出登录');
 };
-$('btn-solo').onclick = ()=>{ sfx('ui'); startGame('solo'); };
+$('btn-solo').onclick = ()=>{ sfx('ui'); openModeSelect(); };
+function openModeSelect(){
+  var m = $('mode-modal');
+  var b = (AUTH.user && AUTH.user.best) || {};
+  $('mode-best').textContent = '个人最佳 — 无限: ' + (b.endless|0) + ' 分 · 30秒: ' + (b.rush30|0) + ' 分';
+  m.style.display = 'flex';
+  m.querySelectorAll('[data-mode]').forEach(function(btn){
+    btn.onclick = function(){ m.style.display = 'none'; sfx('ui'); startGame('solo', btn.getAttribute('data-mode')); };
+  });
+  $('mode-cancel').onclick = function(){ m.style.display = 'none'; };
+}
 $('btn-create').onclick = ()=>{ sfx('ui'); openRoomSetup(); };
 $('btn-join').onclick = ()=>{
   const code = $('join-code').value.trim().toUpperCase();
@@ -1241,8 +1262,9 @@ function updateScoreboard(){
 }
 
 /* ---------- 开始游戏 ---------- */
-function startGame(mode){
+function startGame(mode, variant){
   if(mode === 'solo') cleanupNet();   // 单人模式清掉联机状态（联机时房间码要保留）
+  if(mode === 'solo') variant = variant || 'normal';
   initRenderer();
   show('screen-game');
   scene = new THREE.Scene();
@@ -1316,6 +1338,7 @@ function startGame(mode){
   G = {
     active:true, mode, mySlot, M,
     arrowType:'normal', hiddenUntil:0, sp:((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.sp) || {}),
+    variant: (mode === 'solo' ? (variant || 'normal') : null), deadline: 0, mvSpeed: 0.55, best: ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}),
     yaw:0, pitch:0, draw:0, drawing:false, aiming:false, scoping:false,
     rightBtn:false, everLocked:false,
     recoil:0, myName: displayName(session), myScore: getScore(session),
@@ -1330,6 +1353,16 @@ function startGame(mode){
     ? '左下角摇杆移动 · 右下角跳/跑 · 拖动屏幕瞄准 · 按住🏹键蓄力松手射箭'
     : '<kbd>WASD</kbd>移动 ｜ <kbd>Shift</kbd>疾跑 ｜ <kbd>空格</kbd>跳跃 ｜ <kbd>左键</kbd>射击/蓄力 ｜ <kbd>右键</kbd>狙击 ｜ 距靶<12m 不计分！';
   $('click-to-play').querySelector('.big').textContent = IS_TOUCH ? '触摸屏幕开始射击' : '点击开始射击';
+  /* 模式初始化 */
+  $('mode-timer').style.display = 'none';
+  if (mode === 'solo' && G.variant === 'rush30') {
+    G.deadline = NOW() + 30000;
+    $('mode-timer').style.display = 'block';
+  }
+  if (mode === 'solo' && G.variant === 'endless') {
+    $('mode-timer').style.display = 'block';
+    $('mode-timer').textContent = '♾️ 得分: 0';
+  }
   /* 聊天面板：联机房间显示，单人隐藏 */
   $('chat-panel').style.display = (mode === 'multi') ? 'flex' : 'none';
   $('chat-msgs').innerHTML = '';
@@ -1622,8 +1655,26 @@ function onHit(arrow, target, r){
       sfx('ui');
       return;   // 不记分 不上报 服务器双重校验
     }
+    if(G.variant === 'precision' && ring < 10){
+      /* 精准挑战: 只有靶心得分, 边缘命中扣箭 */
+      banner('🎯 边缘命中不计分 · 扣 1 箭', '只有靶心（10环）得分');
+      var au2 = AUTH.user; if(au2){ au2.arrows = Math.max(0, (au2.arrows|0) - 1); updateArrowUI(); }
+      try { api('/api/arrow/use', { method:'POST', body:{} }); } catch(e){}
+      sfx('miss');
+      return;
+    }
     G.myScore += pts;
     addScore(G.session, pts);   // 中心服务器记账
+    if(G.variant === 'endless'){   // 无限模式: 每次命中提速+瞬移, 实时刷新个人最佳
+      G.mvSpeed = Math.min(4, G.mvSpeed + 0.12);
+      target.x = (Math.random() - 0.5) * 70;
+      target.dx = Math.random() < 0.5 ? 1 : -1;
+      if(G.myScore > ((G.best||{}).endless|0)){
+        if(!G.best) G.best = {};
+        G.best.endless = G.myScore;
+        try { api('/api/best', { method:'POST', body:{ variant:'endless', score: G.myScore } }); } catch(e){}
+      }
+    }
     try{ api('/api/event/hit', { method:'POST', body:{ ring: ring }, skipAuth:true }); }catch(e){}
     updateScoreboard();
     banner(`★ 恭喜 ${whoName} 完成了靶射击！`, `${ring}环 · 得 ${pts} 分${ring===10?' · 正中靶心！':''}`);
@@ -1686,6 +1737,32 @@ function loop(){
   G.scoping = false;
   $('crosshair').style.display = 'block';
   camera.updateProjectionMatrix();
+
+  /* 模式逻辑: 限时倒计时 / 无限模式移动标靶 */
+  if(G.variant === 'rush30'){
+    var left = G.deadline - t;
+    if(left <= 0 && !G.rushEnded){
+      G.rushEnded = true;
+      var best = (G.best||{}).rush30|0;
+      if(G.myScore > best){ best = G.myScore; try{ api('/api/best', { method:'POST', body:{ variant:'rush30', score: best } }); }catch(e){} }
+      banner('⏱ 时间到！', '本局总分 ' + G.myScore + ' 分 · 个人最佳 ' + best + ' 分');
+      var mt2 = $('mode-timer'); if(mt2){ mt2.textContent = '🏁 ' + G.myScore; }
+      setTimeout(function(){ try { exitGame(); } catch(e) {} }, 2500);
+    } else {
+      var mt = $('mode-timer');
+      if(mt) mt.textContent = '⏱ ' + Math.ceil(left/1000) + 's';
+    }
+  }
+  if(G.variant === 'endless' && G.targets && G.targets[0]){
+    var mtg = G.targets[0];
+    if(mtg.dx === undefined){ mtg.dx = 1; }
+    mtg.x += mtg.dx * G.mvSpeed * dt;
+    if(mtg.x > 38){ mtg.x = 38; mtg.dx = -1; }
+    if(mtg.x < -38){ mtg.x = -38; mtg.dx = 1; }
+    mtg.group.position.x = mtg.x;
+    var mt3 = $('mode-timer');
+    if(mt3) mt3.textContent = '♾️ 得分: ' + G.myScore + ' · 速度: ' + G.mvSpeed.toFixed(1);
+  }
 
   /* 拉弓 */
   if(G.drawing && G.draw < 1) G.draw = Math.min(1, G.draw + dt/1.4);

@@ -200,6 +200,17 @@ export default {
       await writeUser(env, me.name, u);
       return json({ left: u.sp[type]|0 });
     }
+    if (path === '/api/best' && request.method === 'POST') {
+      const v = String(body.variant || '');
+      if (v !== 'endless' && v !== 'rush30') return json({ error: '无效' }, 400);
+      const s = Math.max(0, body.score | 0);
+      const u = await readUser(env, me.name);
+      if (!u) return json({ error: '账号不存在' }, 400);
+      if (!u.best) u.best = {};
+      var changed = false;
+      if (s > (u.best[v]|0)) { u.best[v] = s; changed = true; await writeUser(env, me.name, u); }
+      return json({ ok: true, best: u.best, changed: changed });
+    }
     if (path === '/api/skin/set' && request.method === 'POST') {
       const data = String(body.data || '');
       if (!data.startsWith('data:image/png;base64,') || data.length > 40000) return json({ error: '只支持 64x64 PNG（小于30KB）' }, 400);
