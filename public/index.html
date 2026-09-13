@@ -1338,7 +1338,7 @@ function startGame(mode, variant){
   G = {
     active:true, mode, mySlot, M,
     arrowType:'normal', hiddenUntil:0, sp:((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.sp) || {}),
-    variant: (mode === 'solo' ? (variant || 'normal') : null), deadline: 0, mvSpeed: 0.55, best: ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}),
+    variant: (mode === 'solo' ? (variant || 'normal') : null), deadline: 0, mvSpeed: 1.4, best: ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}),
     yaw:0, pitch:0, draw:0, drawing:false, aiming:false, scoping:false,
     rightBtn:false, everLocked:false,
     recoil:0, myName: displayName(session), myScore: getScore(session),
