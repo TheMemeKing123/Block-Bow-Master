@@ -178,6 +178,38 @@ export class RoomDO {
       await this.persistDb();   // 注册用户立即持久化到 DO 强一致存储
       return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
     }
+    const SP_PRICES = { track: 40, split: 20, ice: 10, boom: 25, shadow: 30 };
+    if (url.pathname === '/sp-buy' && request.method === 'POST') {
+      await this.ensure();
+      const b = await request.json();
+      const type = String(b.type || '');
+      if (!SP_PRICES[type]) return new Response(JSON.stringify({ error: '未知箭种' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      const count = Math.max(1, Math.min(50, b.count | 0));
+      if (!this.db[b.name]) { try { await this.syncUsersFromKV(b.name); } catch (e) {} }
+      const u = this.db[b.name];
+      if (!u) return new Response(JSON.stringify({ error: '账号不存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      const cost = SP_PRICES[type] * count;
+      if ((u.score|0) < cost) return new Response(JSON.stringify({ error: '积分不足，还差 ' + (cost - (u.score|0)) + ' 分' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      u.score = (u.score|0) - cost;
+      if (!u.sp) u.sp = {};
+      u.sp[type] = (u.sp[type]|0) + count;
+      await this.persistDb();
+      return new Response(JSON.stringify({ ok: true, score: u.score|0, left: u.sp[type]|0 }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.pathname === '/sp-use' && request.method === 'POST') {
+      await this.ensure();
+      const b = await request.json();
+      const type = String(b.type || '');
+      if (!SP_PRICES[type]) return new Response(JSON.stringify({ error: '未知箭种' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      if (!this.db[b.name]) { try { await this.syncUsersFromKV(b.name); } catch (e) {} }
+      const u = this.db[b.name];
+      if (!u) return new Response(JSON.stringify({ error: '账号不存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      if (!u.sp) u.sp = {};
+      if ((u.sp[type]|0) < 1) return new Response(JSON.stringify({ error: '该箭已用完', left: 0 }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      u.sp[type] = (u.sp[type]|0) - 1;
+      await this.persistDb();
+      return new Response(JSON.stringify({ left: u.sp[type]|0 }), { headers: { 'Content-Type': 'application/json' } });
+    }
     if (url.pathname === '/gift' && request.method === 'POST') {
       await this.ensure();
       const b = await request.json();

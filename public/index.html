@@ -130,6 +130,10 @@ input{user-select:text;-webkit-user-select:text}
 
 /* 狙击镜 */
 /* 遮罩 */
+#sp-select{position:absolute;bottom:178px;left:12px;z-index:30;display:none;gap:5px}
+.spchip{width:46px;height:46px;border-radius:10px;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.28);color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;user-select:none;line-height:1}
+.spchip b{font-size:10px;color:#ffe08a;margin-top:2px}
+.spchip.on{border-color:#4ce04c;background:rgba(70,130,70,.55)}
 .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;
   background:rgba(0,0,0,.55);pointer-events:auto;z-index:10}
 .overlay.show{display:flex}
@@ -294,6 +298,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <div data-page-node-id="Lpsm69udr1kjrlvCt1xpgG" id="hud">
     <div data-page-node-id="qggSZtsy9XUGqRZiOeT8S1" id="scoreboard"></div>
     <div data-page-node-id="dSFIOYx1Je3LydiZ5hYiqD" id="topbar"><button id="btn-pause-touch" style="pointer-events:auto;cursor:pointer;padding:7px 14px;font-size:13px;font-family:inherit;color:#fff;border:2px solid #000;background:linear-gradient(#5a6b8b,#303c55);text-shadow:1px 1px 0 #333">⏸ 暂停</button><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="hud-arrow" style="background:rgba(0,0,0,.45);border:2px solid rgba(0,0,0,.75);padding:6px 12px;font-size:13px;text-shadow:1px 1px 0 #000;color:#9fd4ff">🪶 --</span><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="room-tag"></span><button data-page-node-id="Ew8MzHt6fvWQUqM0iFisxA" id="btn-exit"><!--pnid:H6WGWhhgnmqvXYgKCdfkat-->退出</button></div>
+    <div id="sp-select"></div>
     <div data-page-node-id="EGq8y3GPBkwVWKhLbK04WA" id="crosshair"></div>
     <div class="overlay" id="wait-overlay">
       <h2 id="wait-title">正在创建房间…</h2>
@@ -418,6 +423,8 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
   </div>
   <div style="color:#ffe08a;margin-bottom:6px">积分：<b id="shop-score">0</b></div>
   <div style="color:#9fd4ff;margin-bottom:12px">箭矢：<b id="shop-arrow">0</b> 支</div>
+  <div style="border-top:1px solid #555;margin:8px 0 6px;padding-top:8px;color:#8dff8d;font-size:13px">✨ 特殊箭矢（消耗品 · 游戏内左下切换使用）</div>
+  <div id="sp-shop"></div>
   <div style="display:flex;gap:8px">
     <button class="mc-btn green" data-count="10" style="flex:1">10支<br><span style="font-size:11px;color:#fff">10分</span></button>
     <button class="mc-btn green" data-count="50" style="flex:1">50支<br><span style="font-size:11px;color:#fff">50分</span></button>
@@ -560,6 +567,24 @@ function canAdmin(name){
   const u = USER_CACHE[name]; return !!(u && (u.isAdmin || u.isDeveloper));
 }
 function getScore(name){ const u = USER_CACHE[name]; return u ? (u.score||0) : 0; }
+function renderSpSelect(){
+  const box = $('sp-select'); if(!box || !G) return;
+  const sp = G.sp || {};
+  const ICONS = { normal:'🎯', track:'🌀', split:'💥', ice:'❄️', boom:'💣', shadow:'👤' };
+  let html = '<div class="spchip' + (G.arrowType==='normal' ? ' on' : '') + '" data-t="normal">' + ICONS.normal + '</div>';
+  ['track','split','ice','boom','shadow'].forEach(function(t){
+    const c = (sp[t]||0);
+    html += '<div class="spchip' + (G.arrowType===t ? ' on' : '') + '" data-t="' + t + '"' + (c < 1 ? ' style="opacity:.4"' : '') + '>' + ICONS[t] + '<b>' + c + '</b></div>';
+  });
+  box.innerHTML = html;
+  box.querySelectorAll('.spchip').forEach(function(ch){
+    ch.onclick = function(){
+      var t = ch.getAttribute('data-t');
+      if(t !== 'normal' && ((G.sp||{})[t]||0) < 1){ toast('该特殊箭已用完', false); return; }
+      G.arrowType = t; sfx('ui'); renderSpSelect();
+    };
+  });
+}
 function addScore(name, d){
   if (AUTH.user && AUTH.user.username === name){
     AUTH.user.score = Math.max(0, (AUTH.user.score||0) + d);
@@ -581,12 +606,31 @@ function getSession(){ return sessionStorage.getItem('mcBow_session'); }
 function clearSession(){ sessionStorage.removeItem('mcBow_session'); }
 
 /* ---------- 屏幕切换 ---------- */
-function refreshShop(){ const u = AUTH.user; if($('shop-score')) $('shop-score').textContent = u ? u.score : 0; if($('shop-arrow')) $('shop-arrow').textContent = u ? u.arrows : 0; }
+function refreshShop(){ const u = AUTH.user; if($('shop-score')) $('shop-score').textContent = u ? u.score : 0; if($('shop-arrow')) $('shop-arrow').textContent = u ? u.arrows : 0; if(window.renderSpShop) renderSpShop(); }
 function bindShop(){
   const bs = $('btn-shop'), sm = $('shop-modal');
   if(bs) bs.onclick = () => { sfx('ui'); refreshShop(); sm.style.display = 'flex'; };
   if($('btn-shop-close')) $('btn-shop-close').onclick = () => { sm.style.display = 'none'; };
   sm.onclick = (ev) => { if(ev.target === sm) sm.style.display = 'none'; };
+  window.SP_INFO = { track:{n:'🌀 追踪箭',e:'轻微拐弯追踪靶心',p:40}, split:{n:'💥 分裂箭',e:'命中后散射3支可连击',p:20}, ice:{n:'❄️ 冰冻箭',e:'命中冰冻标靶3秒',p:10}, boom:{n:'💣 爆裂箭',e:'爆裂波及相邻标靶',p:25}, shadow:{n:'👤 影分箭',e:'隐身3秒+本箭必中靶心',p:30} };
+  window.renderSpShop = function(){
+    const box = $('sp-shop'); if(!box) return;
+    const u = AUTH.user; const sp = (u && u.sp) || {};
+    box.innerHTML = Object.keys(SP_INFO).map(function(t){
+      return '<div style="display:flex;align-items:center;gap:6px;margin:5px 0"><span style="flex:1;font-size:12px;line-height:1.35">' + SP_INFO[t].n + '<br><span style="color:#888;font-size:11px">' + SP_INFO[t].e + '</span></span><span style="color:#ffe08a;font-size:12px;min-width:40px;text-align:right">' + SP_INFO[t].p + '分</span><button class="mc-btn small" data-spbuy="' + t + '" style="min-width:64px;padding:3px 6px;font-size:11px">买1 (余' + (sp[t]||0) + ')</button></div>';
+    }).join('');
+    box.querySelectorAll('[data-spbuy]').forEach(function(b){
+      b.onclick = function(){
+        var type = b.getAttribute('data-spbuy'); var u = AUTH.user; if(!u) return;
+        if((u.score|0) < SP_INFO[type].p){ toast('积分不足 打靶赚积分先', false); return; }
+        api('/api/sp/buy', { method:'POST', body: { type: type, count: 1 } }).then(function(d){
+          if(d && d.error){ toast('⚠ ' + d.error, false); return; }
+          if(AUTH.user){ AUTH.user.score = d.score|0; if(!AUTH.user.sp) AUTH.user.sp = {}; AUTH.user.sp[type] = d.left|0; }
+          refreshShop(); renderSpShop(); toast(SP_INFO[type].n + ' 到手 ×' + (d.left|0), true);
+        }).catch(function(e){ toast('购买失败：' + e.message, false); });
+      };
+    });
+  };
   document.querySelectorAll('#shop-modal [data-count]').forEach(btn => btn.onclick = () => {
     const count = +btn.dataset.count;
     const u = AUTH.user;
@@ -1012,7 +1056,7 @@ function buildTarget(M, x, y, z){
   const base = new THREE.Mesh(new THREE.BoxGeometry(2.6,0.3,1.4), M.wood);
   base.position.y = -2.0; base.castShadow = true; g.add(base);
   g.position.set(x, y, z);
-  return { group:g, x, y, z, radius:R, shakeT:-9, disc };
+  return { group:g, x, y, z, radius:R, shakeT:-9, disc, faceMat };
 }
 function buildSteve(name){
   const g = new THREE.Group();
@@ -1268,6 +1312,7 @@ function startGame(mode){
 
   G = {
     active:true, mode, mySlot, M,
+    arrowType:'normal', hiddenUntil:0, sp:((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.sp) || {}),
     yaw:0, pitch:0, draw:0, drawing:false, aiming:false, scoping:false,
     rightBtn:false, everLocked:false,
     recoil:0, myName: displayName(session), myScore: getScore(session),
@@ -1291,6 +1336,7 @@ function startGame(mode){
   $('pause-overlay').classList.remove('show');
   $('click-to-play').classList.add('show');
   updateScoreboard();
+  if(window.renderSpSelect) renderSpSelect();
   bindInput();
   if(!loopStarted){ loopStarted = true; loop(); }
 }
@@ -1531,7 +1577,15 @@ function releaseArrow(){
   const origin = camera.getWorldPosition(new THREE.Vector3()).add(dir.clone().multiplyScalar(0.6)).add(new THREE.Vector3(0,-0.06,0));
   const power = G.draw;
   const vel = dir.multiplyScalar(24 + power * 40);
-  spawnArrow(origin, vel, 'me', G.myName);
+  const spType = (G.arrowType || 'normal');
+  const isCrit = (spType === 'shadow');
+  spawnArrow(origin, vel, 'me', G.myName, spType, isCrit);
+  if(spType !== 'normal'){
+    if(spType === 'shadow'){ G.hiddenUntil = NOW() + 3000; }
+    api('/api/sp/use', { method:'POST', body:{ type: spType } }).then(function(d){
+      if(d && d.left !== undefined){ if(!G.sp) G.sp = {}; G.sp[spType] = d.left|0; if((d.left|0) < 1){ G.arrowType = 'normal'; toast('该特殊箭已用完', false); } renderSpSelect(); }
+    }).catch(function(){});
+  }
   sfx('shoot');
   G.recoil = 1;
   netSend({t:'shoot', o:{x:origin.x,y:origin.y,z:origin.z}, v:{x:vel.x,y:vel.y,z:vel.z}});
@@ -1691,6 +1745,8 @@ function loop(){
     const el = t - tg.shakeT;
     tg.group.rotation.z = (el < 2) ? Math.sin(el*28) * 0.09 * Math.exp(-el*3.5) : 0;
     tg.group.rotation.x = (el < 2) ? Math.sin(el*24) * 0.05 * Math.exp(-el*3.5) : 0;
+    var fz = 3000 - (t - (tg.frozenT || 0));
+    if(tg.faceMat) tg.faceMat.color.set(fz > 0 ? 0x66c8ff : 0xffffff);
   }
 
   /* 云漂移 */
@@ -1722,12 +1778,13 @@ function loop(){
     s.legL.rotation.x = moving ? swing : Math.sin(t*2.2)*0.08;
     s.legR.rotation.x = moving ? -swing : -Math.sin(t*2.2)*0.08;
     s.head.rotation.y = ((pp && pp.yaw) || 0);
+    s.group.visible = !(pp && pp.hidden);   // 影分: 对方隐身时隐藏其模型
   }
 
   /* 姿态同步（节流） */
   if(G.mode==='multi' && t - G.lastPose > 0.1){
     G.lastPose = t;
-    netSend({t:'pose', yaw:G.yaw, draw:G.draw, x:camera.position.x, y:camera.position.y, z:camera.position.z});
+    netSend({t:'pose', yaw:G.yaw, draw:G.draw, x:camera.position.x, y:camera.position.y, z:camera.position.z, hidden:(G.hiddenUntil||0) > t});
   }
 
   renderer.render(scene, camera);
@@ -2247,7 +2304,7 @@ function handleGameData(d){
     updateScoreboard();
   }
   else if(d.t === 'miss'){ sfx('miss'); }
-  else if(d.t === 'pose'){ ensureSteve(from); G.foePose[from] = { yaw: d.yaw || 0, draw: d.draw || 0, x: d.x, y: (d.y === undefined ? 1.62 : d.y), z: d.z }; }
+  else if(d.t === 'pose'){ ensureSteve(from); G.foePose[from] = { yaw: d.yaw || 0, draw: d.draw || 0, x: d.x, y: (d.y === undefined ? 1.62 : d.y), z: d.z, hidden: !!d.hidden }; }
   else if(d.t === 'leave'){ if(G.steves[from]){ scene.remove(G.steves[from].group); delete G.steves[from]; } updateScoreboard(); }
   else if(d.t === 'invite-fail'){ toast('邀请失败：' + (d.reason || '对方不在线'), false); }
 }

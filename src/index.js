@@ -146,7 +146,7 @@ export default {
         try {
           const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
           const r = await stub.fetch('https://do/user-score?name=' + encodeURIComponent(name));
-          if (r.ok) { const dsc = await r.json(); if (dsc.score !== null) uo.score = dsc.score; if (dsc.arrows !== null) uo.arrows = dsc.arrows; }
+          if (r.ok) { const dsc = await r.json(); if (dsc.score !== null) uo.score = dsc.score; if (dsc.arrows !== null) uo.arrows = dsc.arrows; uo.sp = dsc.sp || uo.sp; }
         } catch (e) {}
         return json({ token: await issueToken(env, name), user: pubUser(uo) });
       } catch (e) { return json({ error: 'SRV ' + (e.message || String(e)) + ' :: ' + String(e.stack || '').slice(0, 400) }, 500); }
@@ -169,7 +169,7 @@ export default {
       try {
         const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
         const r = await stub.fetch('https://do/user-score?name=' + encodeURIComponent(me.name));
-        if (r.ok) { const d = await r.json(); if (d.score !== null) uo.score = d.score; if (d.arrows !== null) uo.arrows = d.arrows; }
+        if (r.ok) { const d = await r.json(); if (d.score !== null) uo.score = d.score; if (d.arrows !== null) uo.arrows = d.arrows; uo.sp = d.sp || uo.sp; }
       } catch (e) {}
       return json({ user: pubUser(uo) });
     }
@@ -205,6 +205,13 @@ export default {
       const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
       const r = await stub.fetch('https://do/dbdbg');
       return new Response(await r.text(), { status: r.status, headers: { 'Content-Type': 'application/json' } });
+    }
+    if ((path === '/api/sp/buy' || path === '/api/sp/use') && request.method === 'POST') {
+      try {
+        const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+        const r = await stub.fetch('https://do/' + (path === '/api/sp/buy' ? 'sp-buy' : 'sp-use'), { method: 'POST', body: JSON.stringify({ name: me.name, type: String(body.type || ''), count: body.count | 0 }) });
+        return json(await r.json());
+      } catch (e) { return json({ error: '服务暂不可用' }, 500); }
     }
     if (path === '/api/sync-me' && request.method === 'POST') {
       try {
