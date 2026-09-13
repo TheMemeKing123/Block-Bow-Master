@@ -1283,13 +1283,19 @@ function makeArrowProto(){
   const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.014, 0.24), featherR); f2.position.z = -0.44; g.add(f2);
   arrowProto = g;
 }
-function spawnArrow(origin, vel, owner, ownerName){
+const SP_TINT = { track: 0x59c8ff, split: 0xffb347, ice: 0x9fd8ff, boom: 0xff6b4a, shadow: 0xc79bff };
+function spawnArrow(origin, vel, owner, ownerName, spType, isCrit){
   if(!arrowProto) makeArrowProto();
   const mesh = arrowProto.clone();
+  const sp = spType || 'normal';
+  if(sp !== 'normal' && mesh.children[0]){   // 箭杆染色区分特殊箭
+    mesh.children[0].material = mesh.children[0].material.clone();
+    mesh.children[0].material.color.setHex(SP_TINT[sp] || 0xffffff);
+  }
   mesh.position.copy(origin);
   mesh.lookAt(origin.clone().add(vel));
   scene.add(mesh);
-  G.arrows.push({mesh, vel:vel.clone(), owner, ownerName, life:0, stuck:false});
+  G.arrows.push({mesh, vel:vel.clone(), owner, ownerName, life:0, stuck:false, sp: sp, crit: !!isCrit});
 }
 
 /* ---------- 粒子 ---------- */
@@ -1842,6 +1848,10 @@ function onHit(arrow, target, r){
   sfx('hit');
   if(isMine){
     if(G.variant === 'rush30' && G.rushEnded) return;   // 30秒已到: 箭可留靶上但不计分
+    /* 特殊箭命中效果(在计分前定义, 命中横幅会提及) */
+    var spFx = '';
+    if(a.sp === 'ice'){ target.frozenT = NOW() + 3000; spFx = ' · ❄ 已冰冻3秒'; }   // 冰冻: 标靶停动+变蓝3秒
+    if(a.sp === 'boom'){ burst(arrow.mesh.position, 0xff7744); burst(arrow.mesh.position, 0xffcc44); spFx = ' · 💣 爆裂冲击'; }
     let pts = ring;
     /* v5: 距靶太近(近战贴脸) 命中不计分 */
     const cdx = camera.position.x - target.x, cdz = camera.position.z - target.z;
@@ -1870,6 +1880,18 @@ function onHit(arrow, target, r){
       G.missCombo = 0;   // 计分命中清掉连脱计数
       if(G.combo > 1) pts += Math.min(G.combo - 1, 5);
     }
+    if(a.sp === 'boom'){   // 爆裂: 冲击波及 +2 分
+      pts += 2;
+    }
+    if(a.sp === 'split'){   // 分裂: 散射3支可连击
+      for(var si = 0; si < 3; si++){
+        var ang = (si - 1) * 0.3;
+        var sv = new THREE.Vector3(Math.sin(ang), Math.cos(ang) * 0.5 - 0.1, -1).normalize().multiplyScalar(18);
+        var so = arrow.mesh.position.clone(); so.z += 0.55;
+        spawnArrow(so, sv, 'me', G.myName, 'normal');
+      }
+      spFx = ' · 💥 已散射3支';
+    }
     G.roundScore = (G.roundScore|0) + pts;   // 本局得分（结算/排行榜/个人最佳都用它）
     addScore(G.session, pts);   // 中心服务器记账（账号总积分）
     if(G.variant === 'endless'){   // 无限模式: 命中提速+瞬移(房主权威), 个人最佳各记各的
@@ -1887,7 +1909,7 @@ function onHit(arrow, target, r){
     try{ api('/api/event/hit', { method:'POST', body:{ ring: ring }, skipAuth:true }); }catch(e){}
     updateScoreboard();
     var comboTxt = (G.combo|0) > 1 ? ' · 连击x' + G.combo + '（+' + Math.min(G.combo - 1, 5) + '）' : '';
-    banner(`★ 恭喜 ${whoName} 完成了靶射击！`, `${ring}环${comboTxt} · 得 ${pts} 分${ring===10?' · 正中靶心！':''}`);
+    banner(`★ 恭喜 ${whoName} 完成了靶射击！`, `${ring}环${spFx}${comboTxt} · 得 ${pts} 分${ring===10?' · 正中靶心！':''}`);
     netSend({t:'hit', ring, pts, x:arrow.mesh.position.x, y:arrow.mesh.position.y, z:arrow.mesh.position.z, name:G.myName, myScore:G.myScore});
   } else {
     banner(`★ 恭喜 ${whoName} 完成了靶射击！`, `${ring}环 · 对方得 ${ring} 分`);
@@ -1972,16 +1994,18 @@ function loop(){
   if(G.variant === 'endless' && G.targets && G.targets[0]){
     /* 只有一个共用靶; 多人下房主权威模拟, 房员本地同速模拟+向房主位置轻校正, 两端看到基本同一位置 */
     var mtg = G.targets[0];
-    if(mtg.dx === undefined){ mtg.dx = 1; }
-    mtg.x += mtg.dx * G.mvSpeed * dt;
-    if(mtg.x > 38){ mtg.x = 38; mtg.dx = -1; }
-    if(mtg.x < -38){ mtg.x = -38; mtg.dx = 1; }
-    if(G.mode === 'multi' && !NET.isHost && mtg.rx !== undefined){
-      mtg.x += (mtg.rx - mtg.x) * Math.min(1, dt * 5);
+    if(!(mtg.frozenT > NOW())){   // 冰冻箭: 冻结期间标靶静止
+      if(mtg.dx === undefined){ mtg.dx = 1; }
+      mtg.x += mtg.dx * G.mvSpeed * dt;
+      if(mtg.x > 38){ mtg.x = 38; mtg.dx = -1; }
+      if(mtg.x < -38){ mtg.x = -38; mtg.dx = 1; }
+      if(G.mode === 'multi' && !NET.isHost && mtg.rx !== undefined){
+        mtg.x += (mtg.rx - mtg.x) * Math.min(1, dt * 5);
+      }
+      mtg.group.position.x = mtg.x;
     }
-    mtg.group.position.x = mtg.x;
     var mt3 = $('mode-timer');
-    if(mt3) mt3.textContent = '♾️ 得分: ' + (G.roundScore|0) + ((G.combo|0)>1 ? ' · 连击x'+G.combo : '') + ' · 速度: ' + G.mvSpeed.toFixed(1);
+    if(mt3) mt3.textContent = '♾️ 得分: ' + (G.roundScore|0) + ((G.combo|0)>1 ? ' · 连击x'+G.combo : '') + (mtg.frozenT > NOW() ? ' · ❄' : '') + ' · 速度: ' + G.mvSpeed.toFixed(1);
   }
 
   /* 拉弓 */
@@ -2003,6 +2027,15 @@ function loop(){
       continue;
     }
     const prev = m.position.clone();
+    /* 特殊箭制导: track=轻微拐弯追踪靶心, shadow=强导必中靶心 */
+    if(!a.stuck && (a.sp === 'track' || a.crit) && G.targets && G.targets[0] && m.position.z > G.targets[0].z + 0.2){
+      var tg0 = G.targets[0];
+      var hx = tg0.x + (a.crit ? 0 : Math.sin(t * 2.1 + a.life * 2.7) * 0.35);
+      var hy = tg0.y + (a.crit ? 0 : Math.cos(t * 1.7 + a.life * 1.9) * 0.25);
+      var hv = new THREE.Vector3(hx - m.position.x, hy - m.position.y, tg0.z - m.position.z).normalize();
+      var hsp = a.vel.length();
+      a.vel.lerp(hv.multiplyScalar(hsp), a.crit ? Math.min(1, dt * 7) : Math.min(1, dt * 2.4));
+    }
     a.vel.y -= 11 * dt;
     m.position.addScaledVector(a.vel, dt);
     m.lookAt(m.position.clone().add(a.vel));
