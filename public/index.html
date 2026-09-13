@@ -1850,8 +1850,8 @@ function onHit(arrow, target, r){
     if(G.variant === 'rush30' && G.rushEnded) return;   // 30秒已到: 箭可留靶上但不计分
     /* 特殊箭命中效果(在计分前定义, 命中横幅会提及) */
     var spFx = '';
-    if(a.sp === 'ice'){ target.frozenT = NOW() + 3000; spFx = ' · ❄ 已冰冻3秒'; }   // 冰冻: 标靶停动+变蓝3秒
-    if(a.sp === 'boom'){ burst(arrow.mesh.position, 0xff7744); burst(arrow.mesh.position, 0xffcc44); spFx = ' · 💣 爆裂冲击'; }
+    if(arrow.sp === 'ice'){ target.frozenT = NOW() + 3000; spFx = ' · ❄ 已冰冻3秒'; }   // 冰冻: 标靶停动+变蓝3秒
+    if(arrow.sp === 'boom'){ burst(arrow.mesh.position, 0xff7744); burst(arrow.mesh.position, 0xffcc44); spFx = ' · 💣 爆裂冲击'; }
     let pts = ring;
     /* v5: 距靶太近(近战贴脸) 命中不计分 */
     const cdx = camera.position.x - target.x, cdz = camera.position.z - target.z;
@@ -1880,10 +1880,10 @@ function onHit(arrow, target, r){
       G.missCombo = 0;   // 计分命中清掉连脱计数
       if(G.combo > 1) pts += Math.min(G.combo - 1, 5);
     }
-    if(a.sp === 'boom'){   // 爆裂: 冲击波及 +2 分
+    if(arrow.sp === 'boom'){   // 爆裂: 冲击波及 +2 分
       pts += 2;
     }
-    if(a.sp === 'split'){   // 分裂: 散射3支可连击
+    if(arrow.sp === 'split'){   // 分裂: 散射3支可连击
       for(var si = 0; si < 3; si++){
         var ang = (si - 1) * 0.3;
         var sv = new THREE.Vector3(Math.sin(ang), Math.cos(ang) * 0.5 - 0.1, -1).normalize().multiplyScalar(18);
