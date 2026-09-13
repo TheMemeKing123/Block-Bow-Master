@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "deploy": "node scripts/sync-version.mjs && wrangler deploy",
-    "sync": "node scripts/sync-version.mjs"
+    "sync": "node scripts/sync-version.mjs",
+    "build": "node scripts/sync-version.mjs"
   },
   "devDependencies": {
     "wrangler": "^4"
