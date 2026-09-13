@@ -74,10 +74,38 @@ async function userFromToken(env, token) {
   } catch (e) { return null; }
 }
 
+/* ---------------- 数据服务(美国服务器中转, 无 KV 写入限额) ----------------
+   env.DATA_URL + env.DATA_TOKEN; 主存走数据服务, KV 作镜像兜底 */
+async function dsUrl(env, name) {
+  return env.DATA_URL.replace(/\/+$/, '') + '/' + encodeURIComponent('u:' + name);
+}
+async function dsGet(env, name) {
+  if (!env.DATA_URL) return null;
+  try {
+    const r = await fetch(await dsUrl(env, name), { headers: { 'X-Data-Token': env.DATA_TOKEN || '' }, cf: { cacheTtl: 0 } });
+    if (!r.ok) return null;
+    return JSON.parse(await r.text());
+  } catch (e) { return null; }
+}
+async function dsPut(env, name, rec) {
+  if (!env.DATA_URL) return false;
+  try {
+    const r = await fetch(await dsUrl(env, name), { method: 'PUT', headers: { 'X-Data-Token': env.DATA_TOKEN || '', 'Content-Type': 'application/json' }, body: JSON.stringify(rec) });
+    return r.ok;
+  } catch (e) { return false; }
+}
+async function dsDel(env, name) {
+  if (!env.DATA_URL) return false;
+  try {
+    const r = await fetch(await dsUrl(env, name), { method: 'DELETE', headers: { 'X-Data-Token': env.DATA_TOKEN || '' } });
+    return r.ok;
+  } catch (e) { return false; }
+}
+
 /* ---------------- 按用户 KV 存取（写入合并缓冲） ---------------- */
 const UKEY = (name) => 'u:' + name;
 var userCache = {};          // 内存缓存(所有已读/已写用户)
-var dirtyUsers = new Set();  // 待刷写的用户名
+var dirtyUsers = {};         // 待刷写的用户名
 var flushTimer = null;
 
 function cacheGet(name) { return userCache[name] || null; }
@@ -86,41 +114,48 @@ function cachePut(name, rec) { userCache[name] = rec; }
 async function readUser(env, name) {
   /* 内存缓存最优先(最新) */
   if (userCache[name] !== undefined) return userCache[name];
-  try { const v = await env.BOW_KV.get(UKEY(name)); if (v) { var rec = JSON.parse(v); cachePut(name, rec); return rec; } } catch (e) {}
+  /* 数据服务(主存, 无限额) */
+  var rec = await dsGet(env, name);
+  if (rec) { cachePut(name, rec); return rec; }
+  try { const v = await env.BOW_KV.get(UKEY(name)); if (v) { var recK = JSON.parse(v); cachePut(name, recK); return recK; } } catch (e) {}
   /* 旧整库迁移 */
   try {
     var blob = JSON.parse((await env.BOW_KV.get('db')) || 'null');
     if (blob && blob[name]) {
       var rec2 = blob[name];
       cachePut(name, rec2);
+      try { await dsPut(env, name, rec2); } catch (e) {}
       try { await env.BOW_KV.put(UKEY(name), JSON.stringify(rec2)); } catch (e) {}
       return rec2;
     }
   } catch (e) {}
   return null;
 }
-/* 写入: 更新内存缓存, 标记 dirty; 每 20 秒或手动触发时批量刷 KV */
+/* 写入: 更新内存缓存, 标记 dirty; 由请求结束前的 flushDirty 统一落盘(保证响应前持久化) */
 function markDirty(name, rec) {
   userCache[name] = rec;
   dirtyUsers[name] = true;
 }
 async function flushDirty(env) {
+  if (!env) return;
   var keys = Object.keys(dirtyUsers);
-  if (!keys.length) return;
   for (var i = 0; i < keys.length; i++) {
     var nm = keys[i];
     var rec = userCache[nm];
-    if (rec) { try { await env.BOW_KV.put(UKEY(nm), JSON.stringify(rec)); } catch (e) {} }
-    delete dirtyUsers[nm];
+    if (rec) {
+      var ok = await dsPut(env, nm, rec);   // 主存(美国服务器): 成功才算落盘
+      try { await env.BOW_KV.put(UKEY(nm), JSON.stringify(rec)); } catch (e) { /* KV 镜像失败(如额度耗尽)不阻断 */ }
+      if (ok) delete dirtyUsers[nm];        // 主存失败保留 dirty, 下次请求重试
+    } else { delete dirtyUsers[nm]; }
   }
 }
 async function writeUser(env, name, rec) {
   cachePut(name, rec);
   dirtyUsers[name] = true;
-  if (env) globalThis.__bowEnv = env;
 }
 async function delUser(env, name) {
   delete userCache[name];
+  try { await dsDel(env, name); } catch (e) {}
   try { await env.BOW_KV.delete(UKEY(name)); } catch (e) {}
 }
 
@@ -137,5 +172,5 @@ function pubUser(u) {
 export {
   ADMIN_NAME, ADMIN_DEFAULT_PASS, TOKEN_TTL,
   b64u, hex, hashPass, getDb, putDb, getSecret, hmacSign,
-  issueToken, userFromToken, pubUser, nameToId, readUser, writeUser, delUser, flushDirty,
+  issueToken, userFromToken, pubUser, nameToId, readUser, writeUser, delUser, flushDirty, dsGet, dsPut,
 };

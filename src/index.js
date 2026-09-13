@@ -59,7 +59,15 @@ export default {
       } catch (e) { return new Response('not found', { status: 404 }); }
     }
 
-    await flushDirty(env);   // 每次请求先刷掉上次积攒的脏写入
+    try { return await apiBody(request, env, url); }
+    catch (e) { return json({ error: 'SRV ' + String((e && e.message) || e).slice(0, 200) }, 500); }
+    finally { await flushDirty(env); }   // 响应返回前把本次写入落盘(防 isolate 回收丢账号)
+  },
+};
+
+/* API 主体(独立函数, 便于统一在响应返回前把 KV 写入刷盘) */
+async function apiBody(request, env, url) {
+    await flushDirty(env);   // 先刷掉上次积攒的脏写入
     const body = await readBody(request);
     const token = request.headers.get('X-User-Token');
     const me = await userFromToken(env, token);
@@ -151,7 +159,7 @@ export default {
       const d = body.delta | 0;
       const u = await readUser(env, me.name);
       if (!u) return json({ error: '账号不存在' }, 400);
-      if (!Number.isInteger(d) || d < 1 || d > 10) return json({ error: '数据异常', score: u.score|0 }, 403);
+      if (!Number.isInteger(d) || d < 1 || d > 15) return json({ error: '数据异常', score: u.score|0 }, 403);   // 10环+连击加成最多15
       /* 贴脸防刷: 距最近有效靶 <12 米不计分 */
       const T1 = { x: -2.0, z: -22 }, T2 = { x: 2.0, z: -22 };
       const px = Number(body.x), pz = Number(body.z);
@@ -342,6 +350,16 @@ export default {
       var canTouch = function(u){ return u && (me.name === ADMIN_NAME || (!isDev(u) && (!u.isAdmin || me.isDeveloper))); };
       var meIsDev = !!me.isDeveloper;
 
+      /* 救援迁移: 只读导出 DO state.storage 里的旧账号库 */
+      if (path === '/api/admin/do-db' && request.method === 'GET') {
+        try {
+          const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+          const r = await stub.fetch('https://do/db-dump', { headers: { 'X-Internal-Token': (env.AI_PROXY_TOKEN || '') } });
+          const d = await r.json();
+          return json({ has: d.has, count: d.count, db: d.db });
+        } catch (e) { return json({ error: String((e && e.message) || e).slice(0, 200) }, 500); }
+      }
+
       if (path === '/api/admin/users' && request.method === 'GET') {
         const online = await presenceList(env);
         var cursor = undefined; var users = [];
@@ -456,5 +474,4 @@ export default {
       return json({ error: 'not found' }, 404);
     }
     return json({ error: 'not found' }, 404);
-  },
-};
+}

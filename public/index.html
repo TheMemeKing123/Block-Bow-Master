@@ -313,6 +313,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
       <h2>游戏暂停</h2>
       <button class="mc-btn" id="btn-resume">继 续 射 击</button>
       <button class="mc-btn" id="btn-pause-invite" style="margin:6px 0">📨 邀请好友进房</button>
+      <button class="mc-btn" id="btn-pause-mode" style="margin:6px 0;display:none">🎮 换房间模式（房主）</button>
       <button class="mc-btn small danger" id="btn-pause-exit">退出到大厅</button>
       <div class="note">按 ESC 暂停 / 点击画面继续</div>
     </div>
@@ -387,11 +388,27 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <option value="6">6 人</option>
     <option value="8">8 人</option>
   </select>
+  <div style="margin:12px 0 4px;color:#aaa;font-size:12px">游戏模式（房主可随时更换）</div>
+  <div id="room-modes" style="display:flex;flex-wrap:wrap;gap:6px" data-sel="normal">
+    <button class="mc-btn small" data-rmode="normal" style="flex:1;padding:5px 4px">🎯 普通</button>
+    <button class="mc-btn small" data-rmode="endless" style="flex:1;padding:5px 4px">♾️ 无限</button>
+    <button class="mc-btn small" data-rmode="precision" style="flex:1;padding:5px 4px">🎯 精准</button>
+    <button class="mc-btn small" data-rmode="rush30" style="flex:1;padding:5px 4px">⏱ 狂射</button>
+  </div>
   <div class="row" style="margin-top:14px">
     <button class="mc-btn" id="room-setup-cancel" style="flex:1">取消</button>
     <button class="mc-btn green" id="room-setup-ok" style="flex:1">创建房间</button>
   </div>
 </div></div>
+<!-- 多人换模式弹窗 --><div id="multi-mode-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.75); z-index:70; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:320px;text-align:center">
+    <b style="font-size:16px">🎮 换房间模式</b>
+    <div style="margin-top:12px"></div>
+    <button class="mc-btn" data-mmode="normal" style="width:100%;margin:6px 0">🎯 普通练习</button>
+    <button class="mc-btn" data-mmode="endless" style="width:100%;margin:6px 0">♾️ 无限模式<br><span style="font-size:11px;color:#9fd4ff">标靶提速瞬移 · 连击加成</span></button>
+    <button class="mc-btn" data-mmode="precision" style="width:100%;margin:6px 0">🎯 精准挑战<br><span style="font-size:11px;color:#9fd4ff">只算靶心 · 边缘命中扣箭</span></button>
+    <button class="mc-btn" data-mmode="rush30" style="width:100%;margin:6px 0">⏱ 30秒狂射<br><span style="font-size:11px;color:#9fd4ff">全房同时倒计时 · 比谁分高</span></button>
+    <button class="mc-btn small" id="multi-mode-cancel" style="margin-top:8px;min-width:100px">取消</button>
+  </div></div>
 <!-- 房间密码输入 --><div id="join-pass-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.65); z-index:60; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:300px;text-align:left">
   <b>🔒 该房间需要密码</b>
   <input id="join-pass-input" class="mc-input" maxlength="16" placeholder="输入房间密码" style="margin:12px 0" autocomplete="off">
@@ -660,6 +677,10 @@ let curScreen = 'screen-login';
 function show(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   $(id).classList.add('active'); curScreen = id;
+  /* 大厅常驻通知通道: 在线状态/好友申请/房间邀请/送箭提醒都走它 */
+  if(id === 'screen-lobby'){
+    try{ if(AUTH.token){ FRCHAT.want = true; friendWsConnect(); } }catch(e){}
+  }
 }
 
 /* ---------- 闪退效果 ---------- */
@@ -724,7 +745,7 @@ async function refreshRoomList(){
     box.innerHTML = rooms.map(r=>{
       const mine = r.host === my;
       return '<div style="display:flex;justify-content:space-between;align-items:center;background:#1c1c1c;border-radius:4px;padding:6px 8px;margin:4px 0">' +
-        '<span style="font-size:13px"><b style="color:#ffd54f">'+escapeHtml(r.code)+'</b> · '+escapeHtml(r.host)+' 的房间'+(r.hasPass?' 🔒':'')+(mine?' <small style="color:#7ee37e">(我开的)</small>':'')+'</span>' +
+        '<span style="font-size:13px"><b style="color:#ffd54f">'+escapeHtml(r.code)+'</b> · '+escapeHtml(r.host)+' 的房间'+(r.hasPass?' 🔒':'')+((r.mode && r.mode!=='normal')?' <small style="color:#8dd7ff">['+modeName(r.mode)+']</small>':'')+(mine?' <small style="color:#7ee37e">(我开的)</small>':'')+'</span>' +
         '<span style="font-size:12px;color:'+(r.full?'#ff8a8a':'#7ee37e')+'">'+(r.full?'●已满':'●'+(r.count||1)+'/'+(r.max||4)+'人')+'</span>' +
         (mine ? '<span style="font-size:12px;color:#888">在等朋友…</span>' : '<button class="btn primary" style="padding:4px 10px;font-size:12px" data-room="'+escapeHtml(r.code)+'" '+(r.full?'disabled':'')+'>加入</button>') +
       '</div>';
@@ -901,6 +922,20 @@ bindShop();
   try{ bindSkinModal(); }catch(e){}
   const bpi = $('btn-pause-invite');
   if(bpi) bpi.onclick = () => { sfx('ui'); $('pause-overlay').classList.remove('show'); openInvitePick(); };
+  const bpm = $('btn-pause-mode');
+  if(bpm) bpm.onclick = () => {
+    sfx('ui');
+    $('pause-overlay').classList.remove('show');
+    if(!(NET.isHost && G && G.mode === 'multi')){ toast('只有房主能更换房间模式', false); return; }
+    const mm = $('multi-mode-modal');
+    mm.style.display = 'flex';
+    mm.querySelectorAll('[data-mmode]').forEach(btn => btn.onclick = () => {
+      mm.style.display = 'none';
+      const m2 = btn.getAttribute('data-mmode');
+      try{ if(NET.ws && NET.ws.readyState === 1){ NET.ws.send(JSON.stringify({ t: 'set-mode', mode: m2 })); toast('已切换为' + modeName(m2) + '，全房同步生效', true); } else toast('连接已断开', false); }catch(e){}
+    });
+    const mc = $('multi-mode-cancel'); if(mc) mc.onclick = () => { mm.style.display = 'none'; $('pause-overlay').classList.add('show'); };
+  };
   const rt = $('room-tag');
   if(rt) rt.onclick = () => {
     const c = NET.roomCode || (($('room-tag').textContent||'').replace('房间 ','').trim());
@@ -1102,8 +1137,33 @@ function buildSteve(name){
   const legL = limb(pants,-0.125), legR = limb(pants,0.125);
   legL.position.y = 0.75; legR.position.y = 0.75;
   g.add(armL, armR, legL, legR);
+  /* 手中弓+箭: 挂在持弓臂(armL)手上; 拉弓时臂前伸, 弦中点随手后移, 箭跟着后拉 */
+  const woodM = new THREE.MeshLambertMaterial({color:0x8a5a26});
+  const strM = new THREE.LineBasicMaterial({color:0xffffff});
+  const shaftM = new THREE.MeshLambertMaterial({color:0xcfb98a});
+  const tipM = new THREE.MeshLambertMaterial({color:0x555555});
+  const fletM = new THREE.MeshLambertMaterial({color:0xdedede});
+  const bowHold = new THREE.Group(); bowHold.position.set(0,-0.68,0); bowHold.rotation.z = -Math.PI/2;
+  const bow = new THREE.Group(); bow.rotation.x = Math.PI/2;
+  const curvePts = [];
+  for(let i=0;i<=12;i++){ const a = (i/12 - 0.5) * 2.2; curvePts.push(new THREE.Vector3(Math.cos(a)*0.4, Math.sin(a)*0.4, 0)); }
+  bow.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curvePts), 24, 0.024, 6, false), woodM));
+  const capT = new THREE.Mesh(new THREE.SphereGeometry(0.032, 6, 6), woodM); capT.position.copy(curvePts[0]); bow.add(capT);
+  const capB = new THREE.Mesh(new THREE.SphereGeometry(0.032, 6, 6), woodM); capB.position.copy(curvePts[12]); bow.add(capB);
+  const strArr = new Float32Array([0.19, 0.366, 0,  0.19, 0, 0,  0.19, -0.366, 0]);
+  const strGeo = new THREE.BufferGeometry(); strGeo.setAttribute('position', new THREE.BufferAttribute(strArr, 3));
+  const bowStr = new THREE.Line(strGeo, strM); bow.add(bowStr);
+  const bowArrow = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.5, 5), shaftM); shaft.rotation.z = -Math.PI/2; bowArrow.add(shaft);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.07, 6), tipM); tip.rotation.z = -Math.PI/2; tip.position.x = 0.285; bowArrow.add(tip);
+  const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.014, 0.05), fletM); f1.position.x = -0.2; bowArrow.add(f1);
+  const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.014, 0.05), fletM); f2.position.x = -0.2; f2.rotation.x = Math.PI/2; bowArrow.add(f2);
+  bowArrow.position.set(0.46, 0, 0);
+  bow.add(bowArrow);
+  bowHold.add(bow);
+  armL.add(bowHold);
   const tag = makeNameTag(name); tag.position.y = 2.35; g.add(tag);
-  return { group:g, armL, armR, legL, legR, head, body, tag };
+  return { group:g, armL, armR, legL, legR, head, body, tag, bowStr, bowArrow };
 }
 
 /* ---------- 第一人称手臂 + 弓 ---------- */
@@ -1246,12 +1306,12 @@ function banner(main, sub){
   bannerTimer = setTimeout(()=>b.classList.remove('show'), 3200);
 }
 function updateScoreboard(){
-  let html = `<div class="me">★ ${G.myName}：${G.myScore} 分</div>`;
+  let html = `<div class="me">★ ${G.myName}：${G.roundScore|0} 分（本局）</div>`;
   const an = AUTH.user ? (AUTH.user.arrows|0) : '--';
   html += `<div class="foe" style="color:${an===0?'#ff9d9d':(an<=10?'#ffb347':'#9fd4ff')}">🪶 箭矢：${an} 支</div>`;
   if(G.mode==='multi'){
     const me = getSession();
-    const rows = (G.roomPlayers || []).map(n => ({ n, s: (n === me) ? G.myScore : ((G.scores || {})[n] || 0) }));
+    const rows = (G.roomPlayers || []).map(n => ({ n, s: (n === me) ? (G.roundScore|0) : ((G.scores || {})[n] || 0) }));
     rows.sort((a, b) => b.s - a.s);
     rows.forEach(r => { html += `<div class="foe">☆ ${displayName(r.n)}${r.n===me?'（我）':''}：${r.s} 分</div>`; });
     html += `<div style="color:#aaa;font-size:12px">房内 ${rows.length} 人 · 共同靶场 · 房码在右上角可点复制</div>`;
@@ -1338,10 +1398,10 @@ function startGame(mode, variant){
   G = {
     active:true, mode, mySlot, M,
     arrowType:'normal', hiddenUntil:0, sp:((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.sp) || {}),
-    variant: (mode === 'solo' ? (variant || 'normal') : null), deadline: 0, mvSpeed: 1.4, best: ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}),
+    variant: (['normal','endless','precision','rush30'].indexOf(variant) >= 0 ? variant : 'normal'), deadline: 0, mvSpeed: 1.4, best: ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}),
     yaw:0, pitch:0, draw:0, drawing:false, aiming:false, scoping:false,
     rightBtn:false, everLocked:false,
-    recoil:0, myName: displayName(session), myScore: getScore(session),
+    recoil:0, myName: displayName(session), myScore: getScore(session), roundScore:0, combo:0, lastHitT:0,
     foeName: NET.foeName ? displayName(NET.foeName) : '', foeScore:0,
     arrows:[], particles:[], targets, clouds, steve, trees: treeCols,
     steves:{}, foePose:{}, scores:{}, roomPlayers: session ? [session.slice(0,16)] : [], slotBy:{},
@@ -1355,14 +1415,15 @@ function startGame(mode, variant){
   $('click-to-play').querySelector('.big').textContent = IS_TOUCH ? '触摸屏幕开始射击' : '点击开始射击';
   /* 模式初始化 */
   $('mode-timer').style.display = 'none';
-  if (mode === 'solo' && G.variant === 'rush30') {
+  if (G.variant === 'rush30') {
     G.deadline = NOW() + 30;   // 30 秒
     $('mode-timer').style.display = 'block';
   }
-  if (mode === 'solo' && G.variant === 'endless') {
+  if (G.variant === 'endless') {
     $('mode-timer').style.display = 'block';
     $('mode-timer').textContent = '♾️ 得分: 0';
   }
+  var bpm = $('btn-pause-mode'); if(bpm) bpm.style.display = (mode === 'multi' && NET.isHost) ? 'block' : 'none';
   /* 聊天面板：联机房间显示，单人隐藏 */
   $('chat-panel').style.display = (mode === 'multi') ? 'flex' : 'none';
   $('chat-msgs').innerHTML = '';
@@ -1375,6 +1436,25 @@ function startGame(mode, variant){
   if(window.renderSpSelect) renderSpSelect();
   bindInput();
   if(!loopStarted){ loopStarted = true; loop(); }
+}
+
+/* ---------- 多人房间模式切换（房主广播, 全房同步） ---------- */
+function modeName(m){
+  return ({ normal:'普通练习', endless:'无限模式', precision:'精准挑战', rush30:'30秒狂射' })[m] || '普通练习';
+}
+function applyGameMode(mode){
+  if(!G || !G.active) return;
+  if(['normal','endless','precision','rush30'].indexOf(mode) < 0) mode = 'normal';
+  G.variant = mode;
+  G.roundScore = 0; G.combo = 0; G.lastHitT = 0;   // 换模式 = 新一局, 计分清零
+  G.mvSpeed = 1.4; G.rushEnded = false; G.deadline = 0;
+  if(mode === 'rush30') G.deadline = NOW() + 30;
+  const mt = $('mode-timer');
+  mt.style.display = (mode === 'rush30' || mode === 'endless') ? 'block' : 'none';
+  if(mode === 'endless') mt.textContent = '♾️ 得分: 0';
+  banner('🎮 房间模式：' + modeName(mode),
+    mode === 'rush30' ? '30 秒倒计时开始！' : (mode === 'precision' ? '只算靶心 · 边缘命中扣箭' : (mode === 'endless' ? '命中后标靶提速瞬移 · 连击加成' : '共同靶场 · 随意练习')));
+  updateScoreboard();
 }
 
 /* ---------- 输入（Pointer Events：触屏 + 鼠标统一支持） ---------- */
@@ -1646,13 +1726,15 @@ function onHit(arrow, target, r){
   burst(arrow.mesh.position, 0xe3382c);
   sfx('hit');
   if(isMine){
-    const pts = ring;
+    if(G.variant === 'rush30' && G.rushEnded) return;   // 30秒已到: 箭可留靶上但不计分
+    let pts = ring;
     /* v5: 距靶太近(近战贴脸) 命中不计分 */
     const cdx = camera.position.x - target.x, cdz = camera.position.z - target.z;
     const cdist = Math.sqrt(cdx*cdx + cdz*cdz);
     if(cdist < 12){
       banner('⚠ 离靶太近 ('+Math.round(cdist)+'m) 本箭不计分！退后射击', '最近有效距离 12m');
       sfx('ui');
+      G.combo = 0; G.lastHitT = 0;   // 未计分命中重置连击
       return;   // 不记分 不上报 服务器双重校验
     }
     if(G.variant === 'precision' && ring < 10){
@@ -1661,23 +1743,31 @@ function onHit(arrow, target, r){
       var au2 = AUTH.user; if(au2){ au2.arrows = Math.max(0, (au2.arrows|0) - 1); updateArrowUI(); }
       try { api('/api/arrow/use', { method:'POST', body:{} }); } catch(e){}
       sfx('miss');
+      G.combo = 0; G.lastHitT = 0;   // 边缘命中重置连击
       return;
     }
-    G.myScore += pts;
-    addScore(G.session, pts);   // 中心服务器记账
+    /* 连击加成（精准挑战/无限模式）: 6秒内连续命中, 每级+1分最多+5, 脱靶或超时清零 */
+    if(G.variant === 'precision' || G.variant === 'endless'){
+      if(NOW() - (G.lastHitT||0) <= 6) G.combo = (G.combo|0) + 1; else G.combo = 1;
+      G.lastHitT = NOW();
+      if(G.combo > 1) pts += Math.min(G.combo - 1, 5);
+    }
+    G.roundScore = (G.roundScore|0) + pts;   // 本局得分（结算/排行榜/个人最佳都用它）
+    addScore(G.session, pts);   // 中心服务器记账（账号总积分）
     if(G.variant === 'endless'){   // 无限模式: 每次命中提速+瞬移, 实时刷新个人最佳
       G.mvSpeed = Math.min(4, G.mvSpeed + 0.12);
       target.x = (Math.random() - 0.5) * 70;
       target.dx = Math.random() < 0.5 ? 1 : -1;
-      if(G.myScore > ((G.best||{}).endless|0)){
+      if(G.roundScore > ((G.best||{}).endless|0)){
         if(!G.best) G.best = {};
-        G.best.endless = G.myScore;
-        try { api('/api/best', { method:'POST', body:{ variant:'endless', score: G.myScore } }); } catch(e){}
+        G.best.endless = G.roundScore;
+        try { api('/api/best', { method:'POST', body:{ variant:'endless', score: G.roundScore } }); } catch(e){}
       }
     }
     try{ api('/api/event/hit', { method:'POST', body:{ ring: ring }, skipAuth:true }); }catch(e){}
     updateScoreboard();
-    banner(`★ 恭喜 ${whoName} 完成了靶射击！`, `${ring}环 · 得 ${pts} 分${ring===10?' · 正中靶心！':''}`);
+    var comboTxt = (G.combo|0) > 1 ? ' · 连击x' + G.combo + '（+' + Math.min(G.combo - 1, 5) + '）' : '';
+    banner(`★ 恭喜 ${whoName} 完成了靶射击！`, `${ring}环${comboTxt} · 得 ${pts} 分${ring===10?' · 正中靶心！':''}`);
     netSend({t:'hit', ring, pts, x:arrow.mesh.position.x, y:arrow.mesh.position.y, z:arrow.mesh.position.z, name:G.myName, myScore:G.myScore});
   } else {
     banner(`★ 恭喜 ${whoName} 完成了靶射击！`, `${ring}环 · 对方得 ${ring} 分`);
@@ -1743,11 +1833,16 @@ function loop(){
     var left = G.deadline - t;
     if(left <= 0 && !G.rushEnded){
       G.rushEnded = true;
+      var rs = G.roundScore|0;   // 本局得分（不含账号总积分）
       var best = (G.best||{}).rush30|0;
-      if(G.myScore > best){ best = G.myScore; try{ api('/api/best', { method:'POST', body:{ variant:'rush30', score: best } }); }catch(e){} }
-      banner('⏱ 时间到！', '本局总分 ' + G.myScore + ' 分 · 个人最佳 ' + best + ' 分');
-      var mt2 = $('mode-timer'); if(mt2){ mt2.textContent = '🏁 ' + G.myScore; }
-      setTimeout(function(){ try { exitGame(); } catch(e) {} }, 2500);
+      if(rs > best){ best = rs; try{ api('/api/best', { method:'POST', body:{ variant:'rush30', score: best } }); }catch(e){} }
+      if(G.mode === 'multi'){
+        banner('⏱ 时间到！', '本局 ' + rs + ' 分 · 房主在暂停菜单可换模式再开一局');
+      } else {
+        banner('⏱ 时间到！', '本局总分 ' + rs + ' 分 · 个人最佳 ' + best + ' 分');
+        setTimeout(function(){ try { exitGame(); } catch(e) {} }, 2500);
+      }
+      var mt2 = $('mode-timer'); if(mt2){ mt2.textContent = '🏁 ' + rs; }
     } else {
       var mt = $('mode-timer');
       if(mt) mt.textContent = '⏱ ' + Math.ceil(Math.max(0,left)) + 's';
@@ -1761,7 +1856,7 @@ function loop(){
     if(mtg.x < -38){ mtg.x = -38; mtg.dx = 1; }
     mtg.group.position.x = mtg.x;
     var mt3 = $('mode-timer');
-    if(mt3) mt3.textContent = '♾️ 得分: ' + G.myScore + ' · 速度: ' + G.mvSpeed.toFixed(1);
+    if(mt3) mt3.textContent = '♾️ 得分: ' + (G.roundScore|0) + ((G.combo|0)>1 ? ' · 连击x'+G.combo : '') + ' · 速度: ' + G.mvSpeed.toFixed(1);
   }
 
   /* 拉弓 */
@@ -1809,7 +1904,7 @@ function loop(){
     if(hitAny) continue;
     if(m.position.y <= 0.04){          // 落地
       m.position.y = 0.04; a.stuck = true; a.stickT = t;
-      if(a.owner==='me'){ sfx('miss'); toast('脱靶了！抬高一点再试试', false); netSend({t:'miss'}); }
+      if(a.owner==='me'){ sfx('miss'); toast('脱靶了！抬高一点再试试', false); netSend({t:'miss'}); if(G.variant==='precision'||G.variant==='endless'){ G.combo = 0; G.lastHitT = 0; } }
       continue;
     }
     a.life += dt;
@@ -1838,14 +1933,19 @@ function loop(){
   /* 云漂移 */
   for(const c of G.clouds){ c.position.x += dt*0.7; if(c.position.x > 70) c.position.x = -70; }
 
-  /* 所有其他玩家模型动画（四肢能动） */
+  /* 所有其他玩家模型动画（四肢能动; 姿态按 100ms 延迟插值补帧） */
   for(const sname in G.steves){
     const s = G.steves[sname];
-    const pp = G.foePose[sname];
+    const latest = G.foePose[sname];
+    const ip = sampleFoePose((G.foeBuf || {})[sname], t - 0.1) || latest;
     const prevX = s.group.position.x, prevZ = s.group.position.z;
-    if(pp && pp.x !== undefined){ s.group.position.x += (pp.x - s.group.position.x)*0.25; s.group.position.z += (pp.z - s.group.position.z)*0.25; s.group.position.y = Math.max(0, ((pp.y === undefined ? 1.62 : pp.y)) - 1.62); }
-    s.group.rotation.y = (Math.PI + ((pp && pp.yaw) || 0));
-    const d = (pp && pp.draw) || 0;
+    if(ip && ip.x !== undefined){
+      s.group.position.x = ip.x;
+      s.group.position.z = ip.z;
+      s.group.position.y = Math.max(0, (ip.y === undefined ? 0 : ip.y - 1.62));
+      s.group.rotation.y = Math.PI + (ip.yaw || 0);
+    }
+    const d = (ip && ip.draw) || 0;
     const mv = Math.hypot(s.group.position.x - prevX, s.group.position.z - prevZ);
     s.walkPhase = (s.walkPhase || 0) + mv * 4.5;
     const moving = mv > 0.008;
@@ -1863,13 +1963,21 @@ function loop(){
     }
     s.legL.rotation.x = moving ? swing : Math.sin(t*2.2)*0.08;
     s.legR.rotation.x = moving ? -swing : -Math.sin(t*2.2)*0.08;
-    s.head.rotation.y = ((pp && pp.yaw) || 0);
-    s.group.visible = !(pp && pp.hidden);   // 影分: 对方隐身时隐藏其模型
+    s.head.rotation.y = (ip && ip.yaw) || 0;
+    /* 弓弦随拉弓后移, 箭跟着后拉(与第一人称弓同款动作) */
+    if(s.bowStr){
+      var dcl = Math.max(0, Math.min(1, d));
+      var sp = s.bowStr.geometry.attributes.position;
+      var midX = 0.19 - 0.26 * dcl;
+      if(Math.abs(sp.getX(1) - midX) > 0.002){ sp.setX(1, midX); sp.needsUpdate = true; }
+      s.bowArrow.position.x = 0.46 - 0.26 * dcl;
+    }
+    s.group.visible = !(latest && latest.hidden);   // 影分: 对方隐身时隐藏其模型
   }
 
-  /* 姿态同步（0.25s 节流 + 无变化跳过: 省 DO 请求额度） */
-  if(G.mode==='multi' && t - G.lastPose > 0.25){
-    var pose = { yaw: +G.yaw.toFixed(2), draw: +G.draw.toFixed(2), x: +camera.position.x.toFixed(1), y: +camera.position.y.toFixed(1), z: +camera.position.z.toFixed(1), hidden: (G.hiddenUntil||0) > t };
+  /* 姿态同步（10Hz 采样 + 无变化跳过; WS 转发不计量请求数, 客户端有插值补帧） */
+  if(G.mode==='multi' && t - G.lastPose > 0.1){
+    var pose = { yaw: +G.yaw.toFixed(3), draw: +G.draw.toFixed(3), x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2), hidden: (G.hiddenUntil||0) > t };
     var last = G.lastPoseSent;
     if(!last || last.yaw !== pose.yaw || last.draw !== pose.draw || last.x !== pose.x || last.y !== pose.y || last.z !== pose.z || last.hidden !== pose.hidden){
       G.lastPoseSent = pose; G.lastPose = t;
@@ -1911,7 +2019,7 @@ function hostRoom(setup, isRetry){
   cleanupNet();
   if(!isRetry) NET.retry = 0;
   NET.isHost = true; NET.roomSetup = setup;
-  startGame('multi');       // 直接进入世界 等人不打断
+  startGame('multi', (setup && setup.mode) || 'normal');       // 直接进入世界 等人不打断
   G.waiting = true;
   renderWaitPlayers([G.myName]);
   setTimeout(()=>{ banner('房间就绪', '房码在右上角 · 点它可复制 · 暂停菜单里可邀请好友'); }, 600);
@@ -1920,7 +2028,7 @@ function hostRoom(setup, isRetry){
   NET.ws = ws;
   const failTimer = setTimeout(()=>{ if(!NET.joined){ toast('创建房间超时，请检查网络', false); } }, 20000);
   ws.onopen = ()=>{
-    ws.send(JSON.stringify({t:'create', name:(getSession()||'房主').slice(0,16), pass: setup.pass || '', max: setup.max || 4}));
+    ws.send(JSON.stringify({t:'create', name:(getSession()||'房主').slice(0,16), pass: setup.pass || '', max: setup.max || 4, mode: setup.mode || 'normal'}));
   };
   ws.onmessage = (ev)=>{
     const d = netParse(ev);
@@ -1928,14 +2036,16 @@ function hostRoom(setup, isRetry){
     if(d.t === 'created'){                    // 房间建好，显示房码
       clearTimeout(failTimer);                // 房间已建好, 不再提示"创建超时"
       NET.roomCode = d.code;
+      if(d.mode) applyGameMode(d.mode);       // 服务器确认的房间模式
       $('wait-title').textContent = '等待朋友加入…';
       const wc = $('wait-code'); wc.style.display='block'; wc.textContent = d.code;
       $('room-tag').textContent = '房间 ' + d.code;
       $('room-tag').title = '点击复制房间码';
     }
+    else if(d.t === 'mode'){ applyGameMode(d.mode); }   // 房主换了模式
+    else if(d.t === 'g'){ handleGameData(d.d); }
     else if(d.t === 'peer-joined'){ onPeerJoined(d); }   // 有人进房
     else if(d.t === 'peer-left'){ onPeerLeft(d); }
-    else if(d.t === 'g'){ handleGameData(d.d); }
   };
   ws.onclose = ()=>{
     if(NET.joined){ onRoomLost(); return; }    // 对局中断线
@@ -2196,14 +2306,28 @@ function openGiftModal(name){
 function openRoomSetup(){
   const m = $('room-setup');
   $('room-pass').value = '';
+  const mbox = $('room-modes');
+  if(mbox){
+    mbox.dataset.sel = 'normal'; paintRoomModes();
+    mbox.querySelectorAll('[data-rmode]').forEach(c => c.onclick = () => { sfx('ui'); mbox.dataset.sel = c.getAttribute('data-rmode'); paintRoomModes(); });
+  }
   m.style.display = 'flex';
   $('room-setup-ok').onclick = () => {
     const pass = $('room-pass').value.trim();
     const max = +$('room-max').value || 4;
+    const mode = (mbox && mbox.dataset.sel) || 'normal';
     m.style.display = 'none';
-    hostRoom({ pass, max });
+    hostRoom({ pass, max, mode });
   };
   $('room-setup-cancel').onclick = () => { m.style.display = 'none'; };
+}
+function paintRoomModes(){
+  const box = $('room-modes'); if(!box) return;
+  box.querySelectorAll('[data-rmode]').forEach(c => {
+    const sel = box.dataset.sel === c.getAttribute('data-rmode');
+    c.style.background = sel ? 'linear-gradient(#3d8f3d,#2b5e2b)' : '';
+    c.style.borderColor = sel ? '#9dffb0' : '';
+  });
 }
 function openJoinPass(code){
   const m = $('join-pass-modal');
@@ -2227,22 +2351,49 @@ function openInvitePick(){
   const onlineSet = typeof srvOnlineNames === 'function' ? srvOnlineNames() : [];
   if(!friends.length){ list.innerHTML = '<div style="color:#888;padding:8px">还没有好友 · 先去好友面板加人吧</div>'; }
   else {
-    list.innerHTML = friends.map(n => {
-      const online = onlineSet.indexOf(n) >= 0;
-      return '<div class="mc-btn" data-inv="' + escapeHtml(n) + '" style="display:block;width:100%;margin:4px 0;text-align:left;opacity:' + (online ? '1' : '.4') + '">' + escapeHtml(displayName(n)) + (online ? ' <span style="color:#7eff8a">●在线</span>' : ' <span style="color:#999">○离线</span>') + '</div>';
-    }).join('');
-    list.querySelectorAll('[data-inv]').forEach(el => el.onclick = () => {
-      const to = el.getAttribute('data-inv');
-      try{
-        if(FRCHAT.ws && FRCHAT.ws.readyState === 1) FRCHAT.ws.send(JSON.stringify({ t: 'room-invite', to, code: NET.roomCode }));
-        else { friendWsConnect(); toast('通道连接中 请稍后再试', false); return; }
-        toast('已向 ' + displayName(to) + ' 发送房间邀请', true);
-      }catch(e){ toast('邀请发送失败', false); }
-      m.style.display = 'none';
-    });
+    renderInviteRows(friends, onlineSet);
+    /* 在线状态实时刷新一次, 避免缓存导致的假离线 */
+    try{
+      api('/api/online', { method:'POST', body:{ names: friends.slice(0, 200) } }).then(d => {
+        ONLINE_SET = new Set(d.online || []);
+        if($('invite-pick').style.display === 'none') return;   // 弹层已关闭就不重绘
+        renderInviteRows(friends, Array.from(ONLINE_SET));
+      }).catch(()=>{});
+    }catch(e){}
   }
   m.style.display = 'flex';
   $('invite-pick-close').onclick = () => { m.style.display = 'none'; };
+}
+function renderInviteRows(friends, onlineSet){
+  const list = $('invite-list');
+  list.innerHTML = friends.map(n => {
+    const online = onlineSet.indexOf(n) >= 0;
+    return '<div class="mc-btn" data-inv="' + escapeHtml(n) + '" style="display:block;width:100%;margin:4px 0;text-align:left;opacity:' + (online ? '1' : '.4') + '">' + escapeHtml(displayName(n)) + (online ? ' <span style="color:#7eff8a">●在线</span>' : ' <span style="color:#999">○离线</span>') + '</div>';
+  }).join('');
+  list.querySelectorAll('[data-inv]').forEach(el => el.onclick = () => {
+    const to = el.getAttribute('data-inv');
+    sendRoomInvite(to);
+    $('invite-pick').style.display = 'none';
+  });
+}
+/* 邀请发送: 优先走房间 WS(NET), 兜底走好友通知 WS(FRCHAT); 未连上时等连接成功后自动发出 */
+function sendRoomInvite(to){
+  const send = (ws) => {
+    try{ ws.send(JSON.stringify({ t: 'room-invite', to, code: NET.roomCode })); toast('已向 ' + displayName(to) + ' 发送房间邀请', true); }
+    catch(e){ toast('邀请发送失败', false); }
+  };
+  if(NET.ws && NET.ws.readyState === 1) return send(NET.ws);
+  FRCHAT.want = true;
+  if(FRCHAT.ws && FRCHAT.ws.readyState === 1) return send(FRCHAT.ws);
+  friendWsConnect();
+  const w = FRCHAT.ws;
+  if(w && w.readyState === 0){
+    const once = () => { w.removeEventListener('open', once); send(w); };
+    w.addEventListener('open', once);
+    toast('通道连接中，正在发送…', false);
+  } else {
+    toast('通道未就绪，请稍后再试', false);
+  }
 }
 function renderWaitPlayers(players){
   const box = $('wait-players');
@@ -2286,12 +2437,14 @@ function joinRoom(code, pass, isRetry){
       $('wait-overlay').classList.remove('show');
       NET.foeName = (d.foeName||'房主').slice(0,16);
       G.foeName = displayName(NET.foeName);
+      if(d.mode) applyGameMode(d.mode);     // 房间当前模式
       ensureAllSteves();
       updateScoreboard();
       banner(`已加入房间 ${code}！`, `房内共 ${G.roomPlayers.length} 人，各自的标靶在正前方`);
       sfx('ui');
       return;
     }
+    if(d.t === 'mode'){ applyGameMode(d.mode); }   // 房主换了模式
     if(d.t === 'peer-joined'){ onPeerJoined(d); }
     if(d.t === 'peer-left'){ onPeerLeft(d); }
     else if(d.t === 'room-closed'){ toast('房主已解散房间', false); exitGame(); }
@@ -2367,6 +2520,28 @@ $('chat-input').addEventListener('keydown', e=>{
   if(e.key === 'Enter' && !chatComposing){ e.preventDefault(); sendChat(); }
 });
 
+/* ---------- 远端玩家姿态插值补帧 ----------
+   pose 缓冲按本机到达时间排序, 渲染取 now - 100ms 时刻在相邻两采样间线性插值;
+   朝向走最短弧, 隐藏标记直接取最新采样 */
+function lerpAngle(a, b, k){
+  let d = (b - a) % (Math.PI * 2);
+  if(d > Math.PI) d -= Math.PI * 2;
+  if(d < -Math.PI) d += Math.PI * 2;
+  return a + d * k;
+}
+function sampleFoePose(buf, at){
+  if(!buf || !buf.length) return null;
+  if(buf.length === 1 || at <= buf[0].t) return buf[0];
+  for(let i = buf.length - 1; i >= 1; i--){
+    const a = buf[i-1], b = buf[i];
+    if(at >= a.t){
+      const k = Math.min(1, (at - a.t) / Math.max(1e-6, b.t - a.t));
+      return { x: a.x + (b.x - a.x)*k, y: a.y + (b.y - a.y)*k, z: a.z + (b.z - a.z)*k,
+               yaw: lerpAngle(a.yaw, b.yaw, k), draw: a.draw + (b.draw - a.draw)*k };
+    }
+  }
+  return buf[buf.length - 1];
+}
 /* ---------- 游戏内数据同步 ---------- */
 function handleGameData(d){
   if(!G || !G.active) return;
@@ -2394,9 +2569,18 @@ function handleGameData(d){
     updateScoreboard();
   }
   else if(d.t === 'miss'){ sfx('miss'); }
-  else if(d.t === 'pose'){ ensureSteve(from); G.foePose[from] = { yaw: d.yaw || 0, draw: d.draw || 0, x: d.x, y: (d.y === undefined ? 1.62 : d.y), z: d.z, hidden: !!d.hidden }; }
-  else if(d.t === 'leave'){ if(G.steves[from]){ scene.remove(G.steves[from].group); delete G.steves[from]; } updateScoreboard(); }
+  else if(d.t === 'pose'){
+    ensureSteve(from);
+    var fp = { yaw: d.yaw || 0, draw: d.draw || 0, x: d.x, y: (d.y === undefined ? 1.62 : d.y), z: d.z, hidden: !!d.hidden };
+    G.foePose[from] = fp;   // 最新姿态(hidden 立即生效)
+    if(!G.foeBuf) G.foeBuf = {};
+    var buf = G.foeBuf[from] || (G.foeBuf[from] = []);
+    buf.push({ t: NOW(), yaw: fp.yaw, draw: fp.draw, x: fp.x, y: fp.y, z: fp.z });
+    if(buf.length > 8) buf.shift();
+  }
+  else if(d.t === 'leave'){ if(G.steves[from]){ scene.remove(G.steves[from].group); delete G.steves[from]; } if(G.foeBuf) delete G.foeBuf[from]; delete G.foePose[from]; updateScoreboard(); }
   else if(d.t === 'invite-fail'){ toast('邀请失败：' + (d.reason || '对方不在线'), false); }
+  else if(d.t === 'mode-fail'){ toast('换模式失败：' + (d.reason || '无权'), false); }
 }
 
 /* ============================================================
