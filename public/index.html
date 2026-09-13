@@ -1356,7 +1356,7 @@ function startGame(mode, variant){
   /* 模式初始化 */
   $('mode-timer').style.display = 'none';
   if (mode === 'solo' && G.variant === 'rush30') {
-    G.deadline = NOW() + 30000;
+    G.deadline = NOW() + 30;   // 30 秒
     $('mode-timer').style.display = 'block';
   }
   if (mode === 'solo' && G.variant === 'endless') {
@@ -1750,7 +1750,7 @@ function loop(){
       setTimeout(function(){ try { exitGame(); } catch(e) {} }, 2500);
     } else {
       var mt = $('mode-timer');
-      if(mt) mt.textContent = '⏱ ' + Math.ceil(left/1000) + 's';
+      if(mt) mt.textContent = '⏱ ' + Math.ceil(Math.max(0,left)) + 's';
     }
   }
   if(G.variant === 'endless' && G.targets && G.targets[0]){
