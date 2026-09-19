@@ -1347,21 +1347,23 @@ function seasonInfo(){
 }
 function refreshSeason(){
   if(!SEASON_SYNCED && typeof api === 'function'){
-    SEASON_SYNCED = true;
     api('/api/season', {}).then(function(d){
+      SEASON_SYNCED = true;   // 成功才置位, 失败允许重试(AI评审意见8)
       if(d && typeof d.epoch === 'number' && d.epoch > 1e12){   // epoch 超过32位, 不能用|0截断(AI评审意见)
         SEASON_SYNC = { epoch: d.epoch, ms: (d.ms && d.ms > 3600000) ? d.ms : 7*24*3600*1000 };
-        refreshSeason();
       }
+      refreshSeason();
     }).catch(function(){});
   }
   const el = $('lob-season'); if(!el) return;
   const si = seasonInfo();
   el.textContent = si.txt;
-  let last = null;
-  try{ last = localStorage.getItem('mcBow_season'); }catch(e){}
-  if (last !== null && parseInt(last) < si.idx){ banner('🎉 第' + si.idx + '赛季开启！', '积分与特殊箭已按赛季规则处理（🛡️防丢卡可保护）'); }
-  try{ localStorage.setItem('mcBow_season', String(si.idx)); }catch(e){}
+  if (SEASON_SYNCED){   // 横幅仅在赛季常量与服务端同步后判断(AI评审意见7)
+    let last = null;
+    try{ last = localStorage.getItem('mcBow_season'); }catch(e){}
+    if (last !== null && parseInt(last) < si.idx){ banner('🎉 第' + si.idx + '赛季开启！', '积分与特殊箭已按赛季规则处理（🛡️防丢卡可保护）'); }
+    try{ localStorage.setItem('mcBow_season', String(si.idx)); }catch(e){}
+  }
 }
 /* 段位: 按累计积分定段, 大厅与游戏内记分板展示 */
 function rankOf(score){
