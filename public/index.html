@@ -239,7 +239,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
   <div data-page-node-id="X3ex56L0Mpex5mAHhl57Wy" class="mc-panel wide">
     <h1 data-page-node-id="Jm3jtCrwi3W18FQvgCo0cG" class="game-title" style="font-size:30px"><!--pnid:1S5xXz22HXOO5JGNYBNm3R-->主 菜 单</h1>
     <div data-page-node-id="mXF3VMIz8ZjHGhno8OO5Wx" class="welcome"><!--pnid:oRccaSsMM3o8kaHrKzaLXU-->欢迎回来，<b data-page-node-id="EHVbT1DtKusDnlxqxi4xJo" id="lob-name"></b><!--pnid:ReuViiiAmxTtQr8rMw1FFU-->！</div>
-    <div data-page-node-id="ONdJqj5bhzekQdWGaoESIF" class="stats"><!--pnid:br6SUkoYU8rfYzwvl1fIur-->当前总分：<b data-page-node-id="ta7YNDCV9NABIdiQjqc2P6" id="lob-score"><!--pnid:A9DDtyjVm3NGJP5B2EOMFP-->0</b></div>
+    <div data-page-node-id="ONdJqj5bhzekQdWGaoESIF" class="stats">当前总分：<b data-page-node-id="ta7YNDCV9NABIdiQjqc2P6" id="lob-score">0</b> <b id="lob-rank" style="font-size:13px"></b></div>
     <div class="stats">箭矢：<b id="lob-arrow">--</b> 🪶 <button class="mc-btn gold" id="btn-shop" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">商城</button> <button class="mc-btn gold" id="btn-skin" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🎽皮肤</button></div>
     <div data-page-node-id="SVuf4MLQm2CQgVAHyp3YLj" class="divider"></div>
     <button data-page-node-id="EIPv6bJzrz1pm5EWPDfjYq" class="mc-btn big" id="btn-solo"><!--pnid:KAIIS6OzBXdgbFDI00MNwm-->单人游戏</button>
@@ -631,13 +631,13 @@ function addScore(name, d){
   if (AUTH.user && AUTH.user.username === name){
     AUTH.user.score = Math.max(0, (AUTH.user.score||0) + d);
     USER_CACHE[name] = USER_CACHE[name] || {}; USER_CACHE[name].score = AUTH.user.score;
-    if (curScreen === 'screen-lobby') $('lob-score').textContent = AUTH.user.score;
+    if (curScreen === 'screen-lobby'){ $('lob-score').textContent = AUTH.user.score; refreshRankBadge(); }
   }
   let sx = 0, sz = 0;
   try{ if(typeof camera !== 'undefined' && camera){ sx = Math.round(camera.position.x*10)/10; sz = Math.round(camera.position.z*10)/10; } }catch(e){}
   api('/api/score', { method:'POST', body:{ delta: d, x: sx, z: sz } }).then(r=>{
     if (AUTH.user){ AUTH.user.score = r.score; if (USER_CACHE[AUTH.user.username]) USER_CACHE[AUTH.user.username].score = r.score; }
-    if (curScreen === 'screen-lobby' && getSession() === name) $('lob-score').textContent = r.score;
+    if (curScreen === 'screen-lobby' && getSession() === name){ $('lob-score').textContent = r.score; refreshRankBadge(); }
   }).catch(e=>{ if(e && e.message && String(e.message).indexOf('行为异常')>=0) toast('⚠ ' + e.message, false); });
 }
 function srvOnlineNames(){ return Array.from(ONLINE_SET); }
@@ -781,6 +781,7 @@ function enterLobby(){
   const s = getSession(); if(!s) return show('screen-login');
   $('lob-name').textContent = displayName(s);
   $('lob-score').textContent = getScore(s);
+  refreshRankBadge();
   try{ if(sessionStorage.getItem('mcBow_arrow') !== null) AUTH.user.arrows = +sessionStorage.getItem('mcBow_arrow'); }catch(e){}
   updateArrowUI();
   $('btn-admin').style.display = (AUTH.user && (AUTH.user.isAdmin||AUTH.user.isDeveloper)) ? '' : 'none';
@@ -1322,10 +1323,31 @@ function banner(main, sub){
   clearTimeout(bannerTimer);
   bannerTimer = setTimeout(()=>b.classList.remove('show'), 3200);
 }
+/* 段位: 按累计积分定段, 大厅与游戏内记分板展示 */
+function rankOf(score){
+  const v = score|0;
+  if(v >= 100000) return { emoji:'👑', name:'王者射手', c:'#ffd700' };
+  if(v >= 30000) return { emoji:'🔮', name:'星耀射手', c:'#b57aff' };
+  if(v >= 12000) return { emoji:'💎', name:'钻石射手', c:'#7ae0ff' };
+  if(v >= 5000) return { emoji:'🏆', name:'铂金射手', c:'#7effb0' };
+  if(v >= 2000) return { emoji:'🥇', name:'黄金射手', c:'#ffd54f' };
+  if(v >= 500) return { emoji:'🥈', name:'白银射手', c:'#d9e0e8' };
+  return { emoji:'🥉', name:'青铜射手', c:'#d0a06a' };
+}
+function refreshRankBadge(){
+  const b = $('lob-rank');
+  if(!b) return;
+  const rk = rankOf(AUTH.user ? (AUTH.user.score|0) : 0);
+  b.textContent = rk.emoji + ' ' + rk.name;
+  b.style.color = rk.c;
+}
 function updateScoreboard(){
   const pst = $('pause-stats');
   if(pst) pst.textContent = '📊 本局：射箭 ' + (G.shots|0) + ' · 命中 ' + (G.hits|0) + ' · 脱靶 ' + (G.misses|0) + ' · 最高连击 ' + (G.bestCombo|0);
   let html = `<div class="me">★ ${G.myName}：${G.roundScore|0} 分（本局）</div>`;
+  const meScore = AUTH.user ? (AUTH.user.score|0) : 0;
+  const rk = rankOf(meScore);
+  html += `<div style="font-size:12px;color:${rk.c}">${rk.emoji} ${rk.name} · 累计 ${meScore} 分</div>`;
   const an = AUTH.user ? (AUTH.user.arrows|0) : '--';
   html += `<div class="foe" style="color:${an===0?'#ff9d9d':(an<=10?'#ffb347':'#9fd4ff')}">🪶 箭矢：${an} 支</div>`;
   if(G.mode==='multi'){
@@ -1830,7 +1852,7 @@ function exitGame(){
   $('wait-overlay').classList.remove('show');
   $('pause-overlay').classList.remove('show');
   show('screen-lobby');
-  if (AUTH.user) { $('lob-score').textContent = (AUTH.user.score|0); }
+  if (AUTH.user) { $('lob-score').textContent = (AUTH.user.score|0); refreshRankBadge(); }
   updateArrowUI();
   G = null;
 }
@@ -2106,7 +2128,7 @@ function loop(){
       m.position.y = 0.04; a.stuck = true; a.stickT = t;
       if(a.owner==='me'){
         sfx('miss'); netSend({t:'miss'}); G.misses = (G.misses|0) + 1;   // 本局脱靶数统计
-        if(G.variant==='precision'||G.variant==='endless'){ G.combo = 0; G.lastHitT = 0; }
+        G.combo = 0; G.lastHitT = 0;   // 任意模式脱靶都清零连击(保证最高连击统计准确)
         /* 无限模式: 脱靶扣箭, 连续脱靶阶梯递增(−1,−2,−3…最多−5), 命中清零 */
         if(G.variant === 'endless'){
           G.missCombo = (G.missCombo|0) + 1;
