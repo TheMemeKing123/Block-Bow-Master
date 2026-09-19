@@ -31,6 +31,16 @@ async function notifyUser(env, to, payload) {
   } catch (e) {}
 }
 
+/* 数据服务调用助手(内部令牌) */
+async function dsFetch(env, pathAfter, method, payload) {
+  const base = (env.DATA_URL || '').replace(/\/+$/, '');
+  return fetch(base + pathAfter, {
+    method: method || 'POST',
+    headers: { 'X-Data-Token': env.DATA_TOKEN || '', 'Content-Type': 'application/json' },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+}
+
 /* 全量账号列表: 主存(数据服务 __index)优先, KV u: 键兜底 */
 async function listAllUsers(env) {
   try {
@@ -57,6 +67,13 @@ const NAME_RE = /[<>"'\/\\]/;
 const ADMIN_API = ['/api/admin/'];
 const AUTH_API = ['/api/me', '/api/logout', '/api/online', '/api/users/public', '/api/score', '/api/settings/title'];
 const SP_TYPES = { track: 8, split: 5, ice: 3, boom: 8, shadow: 10 };
+/* ===== 赛季系统: 每7天自动换赛季; 切换时积分/箭矢/特殊箭清零(🛡️防丢卡可保护) ===== */
+const SEASON_EPOCH = Date.UTC(2026, 8, 21, 0, 0, 0);   // 2026-09-21 00:00 UTC 第1赛季开启
+const SEASON_MS = 7 * 24 * 3600 * 1000;
+const CARD_COST = 5000;   // 防丢卡售价(很贵: 赛季保护属高价值道具)
+const SEASON_GRANT_ARROWS = 100;   // 无卡换季的箭矢补给(与新建账号一致)
+function seasonIdx(){ const n = Date.now(); return n < SEASON_EPOCH ? 0 : 1 + Math.floor((n - SEASON_EPOCH) / SEASON_MS); }
+function seasonLeft(){ const n = Date.now(); if (n < SEASON_EPOCH) return SEASON_EPOCH - n; return SEASON_MS - ((n - SEASON_EPOCH) % SEASON_MS); }
 
 export default {
   async fetch(request, env) {
@@ -89,8 +106,29 @@ async function apiBody(request, env, url) {
     await flushDirty(env);   // 先刷掉上次积攒的脏写入
     const body = await readBody(request);
     const token = request.headers.get('X-User-Token');
-    const me = await userFromToken(env, token);
+    const me0 = await userFromToken(env, token);
+    let me = me0;
     const path = url.pathname;
+
+    /* 赛季懒结算: 下沉到数据服务做同步原子读改写(AI评审: 并发下不重复结算/不多扣卡) */
+    if (me && (me.seasonIdx|0) !== seasonIdx()) {
+      try {
+        const sbase = (env.DATA_URL || '').replace(/\/+$/, '');
+        const rS = await fetch(sbase + '/settle/' + encodeURIComponent('u:' + me.name), {
+          method: 'POST',
+          headers: { 'X-Data-Token': env.DATA_TOKEN || '', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idx: seasonIdx(), grant: SEASON_GRANT_ARROWS })
+        });
+        if (rS.ok) {
+          let dS = null;
+          try { dS = await rS.json(); } catch (e) { dS = null; }   // 非JSON响应兜底(AI评审)
+          if (dS && dS.rec) {   // 仅合并结算字段, 不整体替换用户对象(防丢 friends/skin 等)
+            me.score = dS.rec.score|0; me.arrows = dS.rec.arrows|0; me.sp = dS.rec.sp || {};
+            me.anticard = dS.rec.anticard|0; me.seasonIdx = dS.rec.seasonIdx|0; me.cardUsedSeason = dS.rec.cardUsedSeason|0;
+          }
+        }
+      } catch (e) { /* 结算失败不影响本次请求, 下次登录重试 */ }
+    }
 
     /* ---- 无需登录的接口 ---- */
     if (path === '/api/ai-proxy' && request.method === 'POST') {
@@ -131,7 +169,7 @@ async function apiBody(request, env, url) {
       const exists = await readUser(env, name);
       if (exists) return json({ error: '这个账号已经被注册过了' }, 400);
       const salt = hex(crypto.getRandomValues(new Uint8Array(8)));
-      const rec = { salt, pass: await hashPass(pass, salt), score: 0, arrows: 100, banned: false, isAdmin: false, isDeveloper: false, reg: Date.now(), lastLogin: 0, sp: {}, friends: [], requests: [], sent: [], dm: [] };
+      const rec = { salt, pass: await hashPass(pass, salt), score: 0, arrows: 100, banned: false, isAdmin: false, isDeveloper: false, reg: Date.now(), lastLogin: 0, sp: {}, friends: [], requests: [], sent: [], dm: [], seasonIdx: seasonIdx(), anticard: 0 };
       await writeUser(env, name, rec);
       const u = { ...rec, _name: name };
       return json({ token: await issueToken(env, name), user: pubUser(u) });
@@ -176,20 +214,11 @@ async function apiBody(request, env, url) {
       return json({ user: pubUser({ ...me, _name: me.name, _online: online }) });
     }
     if (path === '/api/score' && request.method === 'POST') {
-      const d = body.delta | 0;
-      const u = await readUser(env, me.name);
-      if (!u) return json({ error: '账号不存在' }, 400);
-      if (!Number.isInteger(d) || d < 1 || d > 15) return json({ error: '数据异常', score: u.score|0 }, 403);   // 10环+连击加成最多15
-      /* 贴脸防刷: 距最近有效靶 <12 米不计分 */
-      const T1 = { x: -2.0, z: -22 }, T2 = { x: 2.0, z: -22 };
-      const px = Number(body.x), pz = Number(body.z);
-      if (Number.isFinite(px) && Number.isFinite(pz)) {
-        const d1 = Math.hypot(px - T1.x, pz - T1.z), d2 = Math.hypot(px - T2.x, pz - T2.z);
-        if (Math.min(d1, d2) < 12) return json({ error: '贴脸得分已被拒绝', score: u.score|0 }, 403);
-      }
-      u.score = (u.score|0) + d;
-      await writeUser(env, me.name, u);
-      return json({ score: u.score });
+      /* 记分下沉到数据服务原子操作(AI评审): 服务端校验反作弊并同步读改写 */
+      let d2 = null;
+      try { const r2 = await dsFetch(env, '/score/' + encodeURIComponent('u:' + me.name), 'POST', body); d2 = await r2.json(); } catch (e) { d2 = null; }   // 非JSON响应兜底(AI评审)
+      if (d2 && d2.ok) return json({ score: d2.score|0 });
+      return json({ error: (d2 && d2.error) || '服务暂时不可用，请稍后再试', score: (d2 && d2.score|0) || 0 }, d2 ? 403 : 502);
     }
     if (path === '/api/arrow/use' && request.method === 'POST') {
       const u = await readUser(env, me.name);
@@ -229,6 +258,15 @@ async function apiBody(request, env, url) {
       u.sp[type] = (u.sp[type]|0) - 1;
       await writeUser(env, me.name, u);
       return json({ left: u.sp[type]|0 });
+    }
+    if (path === '/api/card/buy' && request.method === 'POST') {
+      let d3 = null;
+      try { const r3 = await dsFetch(env, '/cardbuy/' + encodeURIComponent('u:' + me.name), 'POST', { cost: CARD_COST }); d3 = await r3.json(); } catch (e) { d3 = null; }
+      if (d3 && d3.ok) return json({ ok: true, score: d3.score|0, anticard: d3.anticard|0 });
+      return json({ error: (d3 && d3.error) || '购买服务暂时不可用，请稍后再试', score: d3 ? (d3.score|0) : 0 }, 400);
+    }
+    if (path === '/api/season' && request.method === 'GET') {
+      return json({ idx: seasonIdx(), left: seasonLeft(), epoch: SEASON_EPOCH, ms: SEASON_MS, cardCost: CARD_COST });
     }
     if (path === '/api/best' && request.method === 'POST') {
       const v = String(body.variant || '');

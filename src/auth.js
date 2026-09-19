@@ -113,15 +113,16 @@ async function dsPatch(env, name, patch) {
 /* ---------------- 按用户 KV 存取（写入合并缓冲） ---------------- */
 const UKEY = (name) => 'u:' + name;
 var userCache = {};          // 内存缓存(所有已读/已写用户)
+var userCacheT = {};         // 缓存写入时间(5秒TTL)
 var dirtyUsers = {};         // 待刷写的用户名
 var flushTimer = null;
 
 function cacheGet(name) { return userCache[name] || null; }
-function cachePut(name, rec) { userCache[name] = rec; }
+function cachePut(name, rec) { userCache[name] = rec; userCacheT[name] = Date.now(); }
 
 async function readUser(env, name) {
-  /* 内存缓存最优先(最新) */
-  if (userCache[name] !== undefined) return userCache[name];
+  /* 内存缓存带TTL(5秒): 避免isolate陈旧副本覆盖数据服务的新写入(AI评审) */
+  if (userCache[name] !== undefined && Date.now() - (userCacheT[name] || 0) < 5000) return userCache[name];
   /* 数据服务(主存, 无限额) */
   var rec = await dsGet(env, name);
   if (rec) { cachePut(name, rec); return rec; }
@@ -170,6 +171,7 @@ function pubUser(u) {
     isAdmin: !!u.isAdmin, isDeveloper: !!u.isDeveloper, arrows: (u.arrows === undefined ? 100 : (u.arrows | 0)),
     sp: u.sp || {},
     best: u.best || {},
+    anticard: u.anticard || 0,
     reg: u.reg || 0, lastLogin: u.lastLogin || 0, online: u._online || false,
   };
 }
