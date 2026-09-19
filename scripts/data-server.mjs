@@ -5,6 +5,7 @@ import path from 'path';
 const DATA_DIR = '/data_store';
 const TOKEN = (process.env.DATA_TOKEN || '').trim();
 fs.mkdirSync(DATA_DIR, { recursive: true });
+const AI_HITS = {};   // AI 中继限流: ip -> 时间戳数组
 const safeKey = (k) => k.replace(/[^a-zA-Z0-9\u4e00-\u9fa5._:-]/g, '').slice(0, 64);
 const server = http.createServer((req, res) => {
   console.log('[req]', req.method, req.url);
@@ -16,6 +17,12 @@ const server = http.createServer((req, res) => {
   const key = safeKey(rawKey);
   /* AI 中继: /ai/<path> -> opencode.ai(经美国服务器出口, 绕开对 Cloudflare Worker 出站的拦截) */
   if (req.method === 'POST' && rawKey.startsWith('ai/')) {
+    if (rawKey !== 'ai/zen/go/v1/chat/completions') { res.writeHead(404); res.end('not found'); return; }   // 白名单: 仅聊天补全
+    const rip = (req.socket.remoteAddress || '?');
+    const nowT = Date.now();
+    AI_HITS[rip] = (AI_HITS[rip] || []).filter(function(t){ return nowT - t < 600000; });
+    if (AI_HITS[rip].length >= 30) { res.writeHead(429); res.end('rate limited'); return; }
+    AI_HITS[rip].push(nowT);
     let body = '';
     req.on('data', (c) => { body += c; if (body.length > 400000) req.destroy(); });
     req.on('end', () => {

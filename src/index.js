@@ -120,8 +120,12 @@ async function apiBody(request, env, url) {
           body: JSON.stringify({ idx: seasonIdx(), grant: SEASON_GRANT_ARROWS })
         });
         if (rS.ok) {
-          const dS = await rS.json();
-          if (dS && dS.rec) me = Object.assign({}, dS.rec, { name: me0.name });
+          let dS = null;
+          try { dS = await rS.json(); } catch (e) { dS = null; }   // 非JSON响应兜底(AI评审)
+          if (dS && dS.rec) {   // 仅合并结算字段, 不整体替换用户对象(防丢 friends/skin 等)
+            me.score = dS.rec.score|0; me.arrows = dS.rec.arrows|0; me.sp = dS.rec.sp || {};
+            me.anticard = dS.rec.anticard|0; me.seasonIdx = dS.rec.seasonIdx|0; me.cardUsedSeason = dS.rec.cardUsedSeason|0;
+          }
         }
       } catch (e) { /* 结算失败不影响本次请求, 下次登录重试 */ }
     }
@@ -211,10 +215,10 @@ async function apiBody(request, env, url) {
     }
     if (path === '/api/score' && request.method === 'POST') {
       /* 记分下沉到数据服务原子操作(AI评审): 服务端校验反作弊并同步读改写 */
-      const r2 = await dsFetch(env, '/score/' + encodeURIComponent('u:' + me.name), 'POST', body);
-      const d2 = await r2.json();
-      if (d2.ok) return json({ score: d2.score|0 });
-      return json({ error: d2.error || '数据异常', score: d2.score|0 }, 403);
+      let d2 = null;
+      try { const r2 = await dsFetch(env, '/score/' + encodeURIComponent('u:' + me.name), 'POST', body); d2 = await r2.json(); } catch (e) { d2 = null; }   // 非JSON响应兜底(AI评审)
+      if (d2 && d2.ok) return json({ score: d2.score|0 });
+      return json({ error: (d2 && d2.error) || '服务暂时不可用，请稍后再试', score: (d2 && d2.score|0) || 0 }, d2 ? 403 : 502);
     }
     if (path === '/api/arrow/use' && request.method === 'POST') {
       const u = await readUser(env, me.name);
@@ -256,10 +260,10 @@ async function apiBody(request, env, url) {
       return json({ left: u.sp[type]|0 });
     }
     if (path === '/api/card/buy' && request.method === 'POST') {
-      const r3 = await dsFetch(env, '/cardbuy/' + encodeURIComponent('u:' + me.name), 'POST', { cost: CARD_COST });
-      const d3 = await r3.json();
-      if (d3.ok) return json({ ok: true, score: d3.score|0, anticard: d3.anticard|0 });
-      return json({ error: d3.error || '购买失败', score: d3.score|0 }, 400);
+      let d3 = null;
+      try { const r3 = await dsFetch(env, '/cardbuy/' + encodeURIComponent('u:' + me.name), 'POST', { cost: CARD_COST }); d3 = await r3.json(); } catch (e) { d3 = null; }
+      if (d3 && d3.ok) return json({ ok: true, score: d3.score|0, anticard: d3.anticard|0 });
+      return json({ error: (d3 && d3.error) || '购买服务暂时不可用，请稍后再试', score: d3 ? (d3.score|0) : 0 }, 400);
     }
     if (path === '/api/season' && request.method === 'GET') {
       return json({ idx: seasonIdx(), left: seasonLeft(), epoch: SEASON_EPOCH, ms: SEASON_MS, cardCost: CARD_COST });
