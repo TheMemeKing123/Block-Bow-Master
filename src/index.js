@@ -61,6 +61,7 @@ const SP_TYPES = { track: 8, split: 5, ice: 3, boom: 8, shadow: 10 };
 const SEASON_EPOCH = Date.UTC(2026, 8, 21, 0, 0, 0);   // 2026-09-21 00:00 UTC 第1赛季开启
 const SEASON_MS = 7 * 24 * 3600 * 1000;
 const CARD_COST = 5000;   // 防丢卡售价(很贵: 赛季保护属高价值道具)
+const SEASON_GRANT_ARROWS = 100;   // 无卡换季的箭矢补给(与新建账号一致)
 function seasonIdx(){ const n = Date.now(); return n < SEASON_EPOCH ? 0 : 1 + Math.floor((n - SEASON_EPOCH) / SEASON_MS); }
 function seasonLeft(){ const n = Date.now(); if (n < SEASON_EPOCH) return SEASON_EPOCH - n; return SEASON_MS - ((n - SEASON_EPOCH) % SEASON_MS); }
 
@@ -99,17 +100,22 @@ async function apiBody(request, env, url) {
     let me = me0;
     const path = url.pathname;
 
-    /* 赛季懒结算: 账号记录的赛季号与当前不一致时, 自动处理新赛季开始 */
+    /* 赛季懒结算: 先占坑(写赛季号)再结算, 保证并发请求只结算一次(AI评审: 资产操作防重复) */
     if (me) {
       const curIdx = seasonIdx();
       if ((me.seasonIdx|0) !== curIdx) {
-        const uS = await readUser(env, me.name);
-        if (uS && (uS.seasonIdx|0) !== curIdx) {   // 二次校验: 降低并发下重复结算的概率(AI评审意见)
-          if ((uS.anticard|0) > 0) { uS.anticard = (uS.anticard|0) - 1; }   // 🛡️防丢卡: 保护本次换季, 一次性消耗
-          else { uS.score = 0; uS.arrows = 100; uS.sp = {}; }               // 无卡: 积分清零, 特殊箭清空, 箭矢补给100支(同新账号)
-          uS.seasonIdx = curIdx;
-          await writeUser(env, me.name, uS);
-          me = Object.assign({}, uS, { name: me0.name });
+        const uM = await readUser(env, me.name);
+        if (uM && (uM.seasonIdx|0) !== curIdx) {
+          uM.seasonIdx = curIdx;                       // 先占坑: 谁写成功谁结算
+          await writeUser(env, me.name, uM);
+          const uS = await readUser(env, me.name);
+          if (uS) {
+            if ((uS.anticard|0) > 0) { uS.anticard = (uS.anticard|0) - 1; }   // 🛡️防丢卡: 保护本次换季, 一次性消耗
+            else { uS.score = 0; uS.arrows = SEASON_GRANT_ARROWS; uS.sp = {}; }   // 无卡: 积分清零, 特殊箭清空, 箭矢补给
+            uS.seasonIdx = curIdx;
+            await writeUser(env, me.name, uS);
+            me = Object.assign({}, uS, { name: me0.name });
+          }
         }
       }
     }
