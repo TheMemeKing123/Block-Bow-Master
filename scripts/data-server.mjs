@@ -53,7 +53,7 @@ const server = http.createServer((req, res) => {
       try { arg = JSON.parse(body || '{}'); } catch (e) {}
       const idx = arg.idx|0;
       const grant = (arg.grant|0) || 100;
-      const f = path.join(DATA_DIR, 'u:' + name + '.json');
+      const f = path.join(DATA_DIR, name + '.json');   // name 已含 u: 前缀(AI评审: 修双前缀)
       let rec = {};
       try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
       if ((rec.seasonIdx|0) !== idx) {
@@ -80,7 +80,7 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       let a = {};
       try { a = JSON.parse(body || '{}'); } catch (e) {}
-      const f = path.join(DATA_DIR, 'u:' + name + '.json');
+      const f = path.join(DATA_DIR, name + '.json');   // name 已含 u: 前缀(AI评审: 修双前缀)
       let rec = {};
       try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
       const d = a.delta|0;
@@ -108,7 +108,7 @@ const server = http.createServer((req, res) => {
       let a = {};
       try { a = JSON.parse(body || '{}'); } catch (e) {}
       const cost = (a.cost|0) || 5000;
-      const f = path.join(DATA_DIR, 'u:' + name + '.json');
+      const f = path.join(DATA_DIR, name + '.json');   // name 已含 u: 前缀(AI评审: 修双前缀)
       let rec = {};
       try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
       if ((rec.score|0) < cost) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '积分不足，还差 ' + (cost - (rec.score|0)) + ' 分', score: rec.score|0 })); return; }
