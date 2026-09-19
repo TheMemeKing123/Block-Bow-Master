@@ -100,22 +100,21 @@ async function apiBody(request, env, url) {
     let me = me0;
     const path = url.pathname;
 
-    /* 赛季懒结算: 先占坑(写赛季号)再结算, 保证并发请求只结算一次(AI评审: 资产操作防重复) */
+    /* 赛季懒结算(幂等设计, AI评审): 用"本赛季已消耗防丢卡"作幂等键, 无论并发结算多少次, 同一赛季结果一致 */
     if (me) {
       const curIdx = seasonIdx();
       if ((me.seasonIdx|0) !== curIdx) {
-        const uM = await readUser(env, me.name);
-        if (uM && (uM.seasonIdx|0) !== curIdx) {
-          uM.seasonIdx = curIdx;                       // 先占坑: 谁写成功谁结算
-          await writeUser(env, me.name, uM);
-          const uS = await readUser(env, me.name);
-          if (uS) {
-            if ((uS.anticard|0) > 0) { uS.anticard = (uS.anticard|0) - 1; }   // 🛡️防丢卡: 保护本次换季, 一次性消耗
-            else { uS.score = 0; uS.arrows = SEASON_GRANT_ARROWS; uS.sp = {}; }   // 无卡: 积分清零, 特殊箭清空, 箭矢补给
-            uS.seasonIdx = curIdx;
-            await writeUser(env, me.name, uS);
-            me = Object.assign({}, uS, { name: me0.name });
+        const uS = await readUser(env, me.name);
+        if (uS && (uS.seasonIdx|0) !== curIdx) {
+          if ((uS.anticard|0) > 0 && (uS.cardUsedSeason|0) !== curIdx) {
+            uS.anticard = (uS.anticard|0) - 1;   // 🛡️防丢卡: 保护本次换季, 一次性消耗
+            uS.cardUsedSeason = curIdx;          // 幂等键: 该赛季已消耗过卡, 重复结算不会多扣
+          } else {
+            uS.score = 0; uS.arrows = SEASON_GRANT_ARROWS; uS.sp = {};   // 无卡: 积分清零, 特殊箭清空, 箭矢补给
           }
+          uS.seasonIdx = curIdx;
+          await writeUser(env, me.name, uS);
+          me = Object.assign({}, uS, { name: me0.name });
         }
       }
     }
