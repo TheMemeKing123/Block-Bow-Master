@@ -6,6 +6,7 @@ const DATA_DIR = '/data_store';
 const TOKEN = (process.env.DATA_TOKEN || '').trim();
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const AI_HITS = {};   // AI 中继限流: ip -> 时间戳数组
+const SP_PRICE = { track: 8, split: 5, ice: 3, boom: 8, shadow: 10 };   // 价目表下沉到数据服务(AI评审: 不信任调用方)
 const safeKey = (k) => k.replace(/[^a-zA-Z0-9\u4e00-\u9fa5._:-]/g, '').slice(0, 64);
 const server = http.createServer((req, res) => {
   console.log('[req]', req.method, req.url);
@@ -52,7 +53,7 @@ const server = http.createServer((req, res) => {
       let arg = {};
       try { arg = JSON.parse(body || '{}'); } catch (e) {}
       const idx = arg.idx|0;
-      const grant = (arg.grant|0) || 100;
+      const grant = Math.max(0, Math.min(200, (arg.grant|0) || 100));   // 补给数量钳制(AI评审)
       const f = path.join(DATA_DIR, name + '.json');   // name 已含 u: 前缀(AI评审: 修双前缀)
       let rec = {};
       try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
@@ -108,9 +109,9 @@ const server = http.createServer((req, res) => {
       let a = {};
       try { a = JSON.parse(body || '{}'); } catch (e) {}
       const type = String(a.type || '').slice(0, 12);
+      if (!SP_PRICE[type]) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '未知箭种', score: rec.score|0 })); return; }   // 类型白名单+价目表在服务端(AI评审: 不可信客户端价格)
       const count = Math.max(1, Math.min(50, (a.count|0) || 1));
-      const price = Math.max(1, (a.price|0) || 1);
-      const cost = price * count;
+      const cost = SP_PRICE[type] * count;
       const f = path.join(DATA_DIR, name + '.json');
       let rec = {};
       try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
@@ -154,6 +155,7 @@ const server = http.createServer((req, res) => {
       let a = {};
       try { a = JSON.parse(body || '{}'); } catch (e) {}
       const type = String(a.type || '').slice(0, 12);
+      if (!SP_PRICE[type]) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '未知箭种', left: 0 })); return; }   // 类型白名单(AI评审)
       const f = path.join(DATA_DIR, name + '.json');
       let rec = {};
       try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
