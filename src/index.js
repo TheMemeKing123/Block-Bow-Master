@@ -31,6 +31,16 @@ async function notifyUser(env, to, payload) {
   } catch (e) {}
 }
 
+/* 数据服务调用助手(内部令牌) */
+async function dsFetch(env, pathAfter, method, payload) {
+  const base = (env.DATA_URL || '').replace(/\/+$/, '');
+  return fetch(base + pathAfter, {
+    method: method || 'POST',
+    headers: { 'X-Data-Token': env.DATA_TOKEN || '', 'Content-Type': 'application/json' },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+}
+
 /* 全量账号列表: 主存(数据服务 __index)优先, KV u: 键兜底 */
 async function listAllUsers(env) {
   try {
@@ -200,20 +210,11 @@ async function apiBody(request, env, url) {
       return json({ user: pubUser({ ...me, _name: me.name, _online: online }) });
     }
     if (path === '/api/score' && request.method === 'POST') {
-      const d = body.delta | 0;
-      const u = await readUser(env, me.name);
-      if (!u) return json({ error: '账号不存在' }, 400);
-      if (!Number.isInteger(d) || d < 1 || d > 15) return json({ error: '数据异常', score: u.score|0 }, 403);   // 10环+连击加成最多15
-      /* 贴脸防刷: 距最近有效靶 <12 米不计分 */
-      const T1 = { x: -2.0, z: -22 }, T2 = { x: 2.0, z: -22 };
-      const px = Number(body.x), pz = Number(body.z);
-      if (Number.isFinite(px) && Number.isFinite(pz)) {
-        const d1 = Math.hypot(px - T1.x, pz - T1.z), d2 = Math.hypot(px - T2.x, pz - T2.z);
-        if (Math.min(d1, d2) < 12) return json({ error: '贴脸得分已被拒绝', score: u.score|0 }, 403);
-      }
-      u.score = (u.score|0) + d;
-      await writeUser(env, me.name, u);
-      return json({ score: u.score });
+      /* 记分下沉到数据服务原子操作(AI评审): 服务端校验反作弊并同步读改写 */
+      const r2 = await dsFetch(env, '/score/' + encodeURIComponent('u:' + me.name), 'POST', body);
+      const d2 = await r2.json();
+      if (d2.ok) return json({ score: d2.score|0 });
+      return json({ error: d2.error || '数据异常', score: d2.score|0 }, 403);
     }
     if (path === '/api/arrow/use' && request.method === 'POST') {
       const u = await readUser(env, me.name);
@@ -255,13 +256,10 @@ async function apiBody(request, env, url) {
       return json({ left: u.sp[type]|0 });
     }
     if (path === '/api/card/buy' && request.method === 'POST') {
-      const u = await readUser(env, me.name);
-      if (!u) return json({ error: '账号不存在' }, 400);
-      if ((u.score|0) < CARD_COST) return json({ error: '积分不足，还差 ' + (CARD_COST - (u.score|0)) + ' 分', score: u.score|0 }, 400);
-      u.score = (u.score|0) - CARD_COST;
-      u.anticard = (u.anticard|0) + 1;
-      await writeUser(env, me.name, u);
-      return json({ ok: true, score: u.score|0, anticard: u.anticard|0 });
+      const r3 = await dsFetch(env, '/cardbuy/' + encodeURIComponent('u:' + me.name), 'POST', { cost: CARD_COST });
+      const d3 = await r3.json();
+      if (d3.ok) return json({ ok: true, score: d3.score|0, anticard: d3.anticard|0 });
+      return json({ error: d3.error || '购买失败', score: d3.score|0 }, 400);
     }
     if (path === '/api/season' && request.method === 'GET') {
       return json({ idx: seasonIdx(), left: seasonLeft(), epoch: SEASON_EPOCH, ms: SEASON_MS, cardCost: CARD_COST });
