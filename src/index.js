@@ -265,6 +265,21 @@ async function apiBody(request, env, url) {
       if (d3 && d3.ok) return json({ ok: true, score: d3.score|0, anticard: d3.anticard|0 });
       return json({ error: (d3 && d3.error) || '购买服务暂时不可用，请稍后再试', score: d3 ? (d3.score|0) : 0 }, 400);
     }
+    if (path === '/api/leaderboard' && request.method === 'GET') {
+      const online = await presenceList(env);
+      const all = await listAllUsers(env);
+      var rows = [];
+      for (var nm in all) {
+        var ru = all[nm];
+        if (!ru || ru.banned || ru.deleted) continue;
+        rows.push({ name: nm, score: ru.score|0 });
+      }
+      rows.sort(function(a, b){ return b.score - a.score; });
+      const top = rows.slice(0, 20).map(function(r, i){
+        return { rank: i + 1, name: r.name, score: r.score, online: online.includes(r.name) };
+      });
+      return json({ top: top });
+    }
     if (path === '/api/season' && request.method === 'GET') {
       return json({ idx: seasonIdx(), left: seasonLeft(), epoch: SEASON_EPOCH, ms: SEASON_MS, cardCost: CARD_COST });
     }
