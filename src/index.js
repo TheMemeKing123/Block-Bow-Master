@@ -221,12 +221,12 @@ async function apiBody(request, env, url) {
       return json({ error: (d2 && d2.error) || '服务暂时不可用，请稍后再试', score: (d2 && d2.score|0) || 0 }, d2 ? 403 : 502);
     }
     if (path === '/api/arrow/use' && request.method === 'POST') {
-      const u = await readUser(env, me.name);
-      if (!u) return json({ error: '账号不存在' }, 400);
-      const n = Math.max(1, Math.min(10, (body.count | 0) || 1));   // 支持批量扣箭(脱靶连击惩罚)
-      u.arrows = Math.max(0, (u.arrows|0) - n);
-      await writeUser(env, me.name, u);
-      return json({ arrows: u.arrows|0 });
+      /* 扣箭下沉为数据服务原子操作(AI评审双存储一致性问题): 整条记录回写会互相覆盖分数 */
+      const n = Math.max(1, Math.min(10, (body.count | 0) || 1));
+      const rA = await dsFetch(env, '/arrowuse/' + encodeURIComponent('u:' + me.name), 'POST', { count: n });
+      const dA = await rA.json();
+      if (dA.ok) return json({ arrows: dA.arrows|0 });
+      return json({ error: '服务暂时不可用，请稍后再试' }, 502);
     }
     if (path === '/api/shop/buy' && request.method === 'POST') {
       const count = Math.max(1, Math.min(10000, Math.floor(Number(body.count) || 0)));
@@ -242,22 +242,11 @@ async function apiBody(request, env, url) {
     if ((path === '/api/sp/buy' || path === '/api/sp/use') && request.method === 'POST') {
       const type = String(body.type || '');
       if (!SP_TYPES[type]) return json({ error: '未知箭种' }, 400);
-      const u = await readUser(env, me.name);
-      if (!u) return json({ error: '账号不存在' }, 400);
-      if (!u.sp) u.sp = {};
-      if (path === '/api/sp/buy') {
-        const count = Math.max(1, Math.min(50, body.count | 0));
-        const cost = SP_TYPES[type] * count;
-        if ((u.score|0) < cost) return json({ error: '积分不足，还差 ' + (cost - (u.score|0)) + ' 分', score: u.score|0 }, 400);
-        u.score = (u.score|0) - cost;
-        u.sp[type] = (u.sp[type]|0) + count;
-        await writeUser(env, me.name, u);
-        return json({ ok: true, score: u.score|0, left: u.sp[type]|0 });
-      }
-      if ((u.sp[type]|0) < 1) return json({ error: '该箭已用完', left: 0 }, 400);
-      u.sp[type] = (u.sp[type]|0) - 1;
-      await writeUser(env, me.name, u);
-      return json({ left: u.sp[type]|0 });
+      /* 特殊箭购买/消耗也下沉为数据服务原子操作(AI评审双存储一致性) */
+      const rB = await dsFetch(env, (path === '/api/sp/buy' ? '/spbuy/' : '/spuse/') + encodeURIComponent('u:' + me.name), 'POST', { type: type, count: (body.count | 0) || 1, price: SP_TYPES[type] });
+      const dB = await rB.json();
+      if (dB.ok) return json({ ok: true, score: dB.score|0, left: dB.left|0 });
+      return json({ error: dB.error || '服务暂时不可用', left: (dB.left|0) || 0 }, 400);
     }
     if (path === '/api/card/buy' && request.method === 'POST') {
       let d3 = null;

@@ -1408,7 +1408,8 @@ function updateScoreboard(){
     rows.forEach(r => { html += `<div class="foe">☆ ${displayName(r.n)}${r.n===me?'（我）':''}：${r.s} 分</div>`; });
     html += `<div style="color:#aaa;font-size:12px">房内 ${rows.length} 人 · 共同靶场 · 房码在右上角可点复制</div>`;
   } else {
-    html += `<div style="color:#aaa;font-size:12px">模式：单人练习</div>`;
+    const mname = ({ normal:'单人练习', endless:'无限模式', precision:'精准挑战', rush30:'30秒狂射' })[G.variant] || '单人练习';
+    html += `<div style="color:#aaa;font-size:12px">模式：${mname}</div>`;
   }
   $('scoreboard').innerHTML = html;
 }

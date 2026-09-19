@@ -98,6 +98,74 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+  /* 购特殊箭(原子): 扣积分加库存 */
+  if (req.method === 'POST' && rawKey.startsWith('spbuy/')) {
+    const name = safeKey(rawKey.slice(6));
+    if (!name) { res.writeHead(400); res.end('no name'); return; }
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 100000) req.destroy(); });
+    req.on('end', () => {
+      let a = {};
+      try { a = JSON.parse(body || '{}'); } catch (e) {}
+      const type = String(a.type || '').slice(0, 12);
+      const count = Math.max(1, Math.min(50, (a.count|0) || 1));
+      const price = Math.max(1, (a.price|0) || 1);
+      const cost = price * count;
+      const f = path.join(DATA_DIR, name + '.json');
+      let rec = {};
+      try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
+      if (!rec.sp) rec.sp = {};
+      if ((rec.score|0) < cost) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '积分不足，还差 ' + (cost - (rec.score|0)) + ' 分', score: rec.score|0 })); return; }
+      rec.score = (rec.score|0) - cost;
+      rec.sp[type] = (rec.sp[type]|0) + count;
+      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: 1, score: rec.score|0, left: rec.sp[type]|0 }));
+    });
+    return;
+  }
+  /* 扣箭(原子): 支持批量(脱靶连扣) */
+  if (req.method === 'POST' && rawKey.startsWith('arrowuse/')) {
+    const name = safeKey(rawKey.slice(9));
+    if (!name) { res.writeHead(400); res.end('no name'); return; }
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 100000) req.destroy(); });
+    req.on('end', () => {
+      let a = {};
+      try { a = JSON.parse(body || '{}'); } catch (e) {}
+      const n = Math.max(1, Math.min(10, (a.count|0) || 1));
+      const f = path.join(DATA_DIR, name + '.json');
+      let rec = {};
+      try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
+      rec.arrows = Math.max(0, (rec.arrows|0) - n);
+      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: 1, arrows: rec.arrows|0 }));
+    });
+    return;
+  }
+  /* 特殊箭消耗(原子) */
+  if (req.method === 'POST' && rawKey.startsWith('spuse/')) {
+    const name = safeKey(rawKey.slice(6));
+    if (!name) { res.writeHead(400); res.end('no name'); return; }
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 100000) req.destroy(); });
+    req.on('end', () => {
+      let a = {};
+      try { a = JSON.parse(body || '{}'); } catch (e) {}
+      const type = String(a.type || '').slice(0, 12);
+      const f = path.join(DATA_DIR, name + '.json');
+      let rec = {};
+      try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
+      if (!rec.sp) rec.sp = {};
+      if ((rec.sp[type]|0) < 1) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '该箭已用完', left: 0 })); return; }
+      rec.sp[type] = (rec.sp[type]|0) - 1;
+      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: 1, left: rec.sp[type]|0 }));
+    });
+    return;
+  }
   /* 购防丢卡(原子): 校验积分并同步扣分+发卡 */
   if (req.method === 'POST' && rawKey.startsWith('cardbuy/')) {
     const name = safeKey(rawKey.slice(8));   // 防路径穿越(AI评审: 必须过滤)
