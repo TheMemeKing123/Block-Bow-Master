@@ -100,23 +100,20 @@ async function apiBody(request, env, url) {
     let me = me0;
     const path = url.pathname;
 
-    /* 赛季懒结算(幂等设计, AI评审): 用"本赛季已消耗防丢卡"作幂等键, 无论并发结算多少次, 同一赛季结果一致 */
-    if (me) {
-      const curIdx = seasonIdx();
-      if ((me.seasonIdx|0) !== curIdx) {
-        const uS = await readUser(env, me.name);
-        if (uS && (uS.seasonIdx|0) !== curIdx) {
-          if ((uS.anticard|0) > 0 && (uS.cardUsedSeason|0) !== curIdx) {
-            uS.anticard = (uS.anticard|0) - 1;   // 🛡️防丢卡: 保护本次换季, 一次性消耗
-            uS.cardUsedSeason = curIdx;          // 幂等键: 该赛季已消耗过卡, 重复结算不会多扣
-          } else {
-            uS.score = 0; uS.arrows = SEASON_GRANT_ARROWS; uS.sp = {};   // 无卡: 积分清零, 特殊箭清空, 箭矢补给
-          }
-          uS.seasonIdx = curIdx;
-          await writeUser(env, me.name, uS);
-          me = Object.assign({}, uS, { name: me0.name });
+    /* 赛季懒结算: 下沉到数据服务做同步原子读改写(AI评审: 并发下不重复结算/不多扣卡) */
+    if (me && (me.seasonIdx|0) !== curSeason) {
+      try {
+        const sbase = (env.DATA_URL || '').replace(/\/+$/, '');
+        const rS = await fetch(sbase + '/settle/' + encodeURIComponent('u:' + me.name), {
+          method: 'POST',
+          headers: { 'X-Data-Token': env.DATA_TOKEN || '', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idx: curSeason, grant: SEASON_GRANT_ARROWS })
+        });
+        if (rS.ok) {
+          const dS = await rS.json();
+          if (dS && dS.rec) me = Object.assign({}, dS.rec, { name: me0.name });
         }
-      }
+      } catch (e) { /* 结算失败不影响本次请求, 下次登录重试 */ }
     }
 
     /* ---- 无需登录的接口 ---- */
