@@ -37,7 +37,7 @@ const server = http.createServer((req, res) => {
   }
   /* 赛季结算(原子): 同步读改写, 单线程事件循环内无并发交错 */
   if (req.method === 'POST' && rawKey.startsWith('settle/')) {
-    const name = rawKey.slice(7);
+    const name = safeKey(rawKey.slice(7));   // 防路径穿越(AI评审: 必须过滤)
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
     req.on('data', (c) => { body += c; if (body.length > 100000) req.destroy(); });
@@ -66,7 +66,7 @@ const server = http.createServer((req, res) => {
   }
   /* 记分(原子): 服务端校验反作弊(12m/单次上限)并同步读改写 */
   if (req.method === 'POST' && rawKey.startsWith('score/')) {
-    const name = rawKey.slice(6);
+    const name = safeKey(rawKey.slice(6));   // 防路径穿越(AI评审: 必须过滤)
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
     req.on('data', (c) => { body += c; if (body.length > 100000) req.destroy(); });
@@ -93,7 +93,7 @@ const server = http.createServer((req, res) => {
   }
   /* 购防丢卡(原子): 校验积分并同步扣分+发卡 */
   if (req.method === 'POST' && rawKey.startsWith('cardbuy/')) {
-    const name = rawKey.slice(8);
+    const name = safeKey(rawKey.slice(8));   // 防路径穿越(AI评审: 必须过滤)
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
     req.on('data', (c) => { body += c; if (body.length > 100000) req.destroy(); });
