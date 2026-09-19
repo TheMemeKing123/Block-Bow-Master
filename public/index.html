@@ -240,7 +240,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <h1 data-page-node-id="Jm3jtCrwi3W18FQvgCo0cG" class="game-title" style="font-size:30px"><!--pnid:1S5xXz22HXOO5JGNYBNm3R-->主 菜 单</h1>
     <div data-page-node-id="mXF3VMIz8ZjHGhno8OO5Wx" class="welcome"><!--pnid:oRccaSsMM3o8kaHrKzaLXU-->欢迎回来，<b data-page-node-id="EHVbT1DtKusDnlxqxi4xJo" id="lob-name"></b><!--pnid:ReuViiiAmxTtQr8rMw1FFU-->！</div>
     <div data-page-node-id="ONdJqj5bhzekQdWGaoESIF" class="stats">当前总分：<b data-page-node-id="ta7YNDCV9NABIdiQjqc2P6" id="lob-score">0</b> <b id="lob-rank" style="font-size:13px"></b></div>
-    <div class="stats">箭矢：<b id="lob-arrow">--</b> 🪶 <button class="mc-btn gold" id="btn-shop" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">商城</button> <button class="mc-btn gold" id="btn-skin" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🎽皮肤</button></div>
+    <div class="stats">箭矢：<b id="lob-arrow">--</b> 🪶 <button class="mc-btn gold" id="btn-shop" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">商城</button> <button class="mc-btn gold" id="btn-skin" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🎽皮肤</button> <button class="mc-btn gold" id="btn-lb" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🏆排行</button></div>
     <div id="lob-season" style="font-size:12px;color:#c9b48a;text-shadow:1px 1px 0 #000;padding:2px 0">🏆 赛季加载中…</div>
     <div data-page-node-id="SVuf4MLQm2CQgVAHyp3YLj" class="divider"></div>
     <button data-page-node-id="EIPv6bJzrz1pm5EWPDfjYq" class="mc-btn big" id="btn-solo"><!--pnid:KAIIS6OzBXdgbFDI00MNwm-->单人游戏</button>
@@ -443,6 +443,13 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
   <div id="invite-list" style="max-height:240px;overflow-y:auto"></div>
   <div style="margin-top:8px;color:#888;font-size:11px">灰色 = 不在线 · 仅在线好友能收到邀请</div>
 </div></div>
+<!-- 全服排行榜弹层 --><div id="lb-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.7); z-index:60; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:340px;text-align:center">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <b>🏆 全服排行榜</b><button class="mc-btn" id="lb-close" style="min-width:44px">✕</button>
+    </div>
+    <div id="lb-list" style="max-height:320px;overflow-y:auto;text-align:left"></div>
+    <div style="margin-top:8px;color:#888;font-size:11px">按累计积分排名 · 每赛季结束重置</div>
+  </div></div>
 <!-- 单人模式选择 --><div id="mode-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.65); z-index:60; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:340px;text-align:center">
     <b style="font-size:16px">🎮 选择游戏模式</b>
     <div style="margin-top:12px"></div>
@@ -939,6 +946,8 @@ $('btn-all-clear').onclick = ()=>{
   });
 };
 bindShop();
+  const blb = $('btn-lb');
+  if(blb) blb.onclick = function(){ sfx('ui'); openLeaderboard(); };
   const bpt = $('btn-pause-touch');
   if(bpt) bpt.onclick = () => { sfx('ui'); $('pause-overlay').classList.toggle('show'); };
   const bif = $('btn-invite-friend');
@@ -2629,6 +2638,30 @@ function openJoinPass(code){
   $('join-pass-cancel').onclick = () => { m.style.display = 'none'; toast('已取消加入', false); };
   inp.onkeydown = (e) => { if(e.key === 'Enter') go(); };
 }
+/* ---------- 全服排行榜 ---------- */
+function openLeaderboard(){
+  const m = $('lb-modal'); if(!m) return;
+  const list = $('lb-list');
+  list.innerHTML = '<div style="color:#888;padding:8px">加载中…</div>';
+  m.style.display = 'flex';
+  $('lb-close').onclick = function(){ m.style.display = 'none'; };
+  api('/api/leaderboard', {}).then(function(d){
+    const top = (d && d.top) || [];
+    const me = getSession();
+    if(!top.length){ list.innerHTML = '<div style="color:#888;padding:8px">还没有玩家上榜，去打靶赚积分吧！</div>'; return; }
+    list.innerHTML = top.map(function(r){
+      const rk = rankOf(r.score|0);
+      const mine = r.name === me;
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin:3px 0;background:' + (mine ? '#24401f' : '#1c1c1c') + ';border-radius:4px;font-size:13px">' +
+        '<span style="min-width:26px;display:inline-block"><b style="color:#ffd54f">#' + r.rank + '</b> ' + rk.emoji + '</span>' +
+        '<span style="flex:1">' + escapeHtml(displayName(r.name)) + (mine ? '（我）' : '') + (r.online ? ' <span style="color:#7eff8a;font-size:11px">●在线</span>' : '') + '</span>' +
+        '<b style="color:#ffd54f">' + (r.score|0) + ' 分</b></div>';
+    }).join('');
+  }).catch(function(){
+    list.innerHTML = '<div style="color:#888;padding:8px">加载失败，请稍后再试</div>';
+  });
+}
+/* ---------- 邀请好友选择 ---------- */
 function openInvitePick(){
   const m = $('invite-pick');
   const list = $('invite-list');
