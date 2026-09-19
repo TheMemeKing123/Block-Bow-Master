@@ -126,14 +126,12 @@ async function readUser(env, name) {
   var rec = await dsGet(env, name);
   if (rec) { cachePut(name, rec); return rec; }
   try { const v = await env.BOW_KV.get(UKEY(name)); if (v) { var recK = JSON.parse(v); cachePut(name, recK); return recK; } } catch (e) {}
-  /* 旧整库迁移 */
+  /* 旧整库迁移(只读兜底: 不再写 KV, 避免消耗写入额度) */
   try {
     var blob = JSON.parse((await env.BOW_KV.get('db')) || 'null');
     if (blob && blob[name]) {
       var rec2 = blob[name];
       cachePut(name, rec2);
-      try { await dsPut(env, name, rec2); } catch (e) {}
-      try { await env.BOW_KV.put(UKEY(name), JSON.stringify(rec2)); } catch (e) {}
       return rec2;
     }
   } catch (e) {}
@@ -151,8 +149,7 @@ async function flushDirty(env) {
     var nm = keys[i];
     var rec = userCache[nm];
     if (rec) {
-      var ok = await dsPut(env, nm, rec);   // 主存(美国服务器): 成功才算落盘
-      try { await env.BOW_KV.put(UKEY(nm), JSON.stringify(rec)); } catch (e) { /* KV 镜像失败(如额度耗尽)不阻断 */ }
+      var ok = await dsPut(env, nm, rec);   // 主存(美国服务器): 成功才算落盘, KV 不再镜像(省写入额度)
       if (ok) delete dirtyUsers[nm];        // 主存失败保留 dirty, 下次请求重试
     } else { delete dirtyUsers[nm]; }
   }
