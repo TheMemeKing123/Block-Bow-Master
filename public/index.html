@@ -1349,7 +1349,10 @@ function refreshSeason(){
   if(!SEASON_SYNCED && typeof api === 'function'){
     SEASON_SYNCED = true;
     api('/api/season', {}).then(function(d){
-      if(d && d.epoch){ SEASON_SYNC = { epoch: d.epoch|0, ms: d.ms|0 }; refreshSeason(); }
+      if(d && typeof d.epoch === 'number' && d.epoch > 1e12){   // epoch 超过32位, 不能用|0截断(AI评审意见)
+        SEASON_SYNC = { epoch: d.epoch, ms: (d.ms && d.ms > 3600000) ? d.ms : 7*24*3600*1000 };
+        refreshSeason();
+      }
     }).catch(function(){});
   }
   const el = $('lob-season'); if(!el) return;

@@ -101,13 +101,13 @@ async function apiBody(request, env, url) {
     const path = url.pathname;
 
     /* 赛季懒结算: 下沉到数据服务做同步原子读改写(AI评审: 并发下不重复结算/不多扣卡) */
-    if (me && (me.seasonIdx|0) !== curSeason) {
+    if (me && (me.seasonIdx|0) !== seasonIdx()) {
       try {
         const sbase = (env.DATA_URL || '').replace(/\/+$/, '');
         const rS = await fetch(sbase + '/settle/' + encodeURIComponent('u:' + me.name), {
           method: 'POST',
           headers: { 'X-Data-Token': env.DATA_TOKEN || '', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idx: curSeason, grant: SEASON_GRANT_ARROWS })
+          body: JSON.stringify({ idx: seasonIdx(), grant: SEASON_GRANT_ARROWS })
         });
         if (rS.ok) {
           const dS = await rS.json();
