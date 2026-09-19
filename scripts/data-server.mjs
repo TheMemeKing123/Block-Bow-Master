@@ -109,12 +109,12 @@ const server = http.createServer((req, res) => {
       let a = {};
       try { a = JSON.parse(body || '{}'); } catch (e) {}
       const type = String(a.type || '').slice(0, 12);
-      if (!SP_PRICE[type]) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '未知箭种', score: rec.score|0 })); return; }   // 类型白名单+价目表在服务端(AI评审: 不可信客户端价格)
-      const count = Math.max(1, Math.min(50, (a.count|0) || 1));
-      const cost = SP_PRICE[type] * count;
       const f = path.join(DATA_DIR, name + '.json');
       let rec = {};
       try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
+      if (!SP_PRICE[type]) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '未知箭种', score: rec.score|0 })); return; }   // 类型白名单+价目表在服务端(AI评审: 不可信客户端价格)
+      const count = Math.max(1, Math.min(50, (a.count|0) || 1));
+      const cost = SP_PRICE[type] * count;
       if (!rec.sp) rec.sp = {};
       if ((rec.score|0) < cost) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '积分不足，还差 ' + (cost - (rec.score|0)) + ' 分', score: rec.score|0 })); return; }
       rec.score = (rec.score|0) - cost;
