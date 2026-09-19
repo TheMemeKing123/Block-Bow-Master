@@ -104,7 +104,7 @@ async function apiBody(request, env, url) {
       const curIdx = seasonIdx();
       if ((me.seasonIdx|0) !== curIdx) {
         const uS = await readUser(env, me.name);
-        if (uS) {
+        if (uS && (uS.seasonIdx|0) !== curIdx) {   // 二次校验: 降低并发下重复结算的概率(AI评审意见)
           if ((uS.anticard|0) > 0) { uS.anticard = (uS.anticard|0) - 1; }   // 🛡️防丢卡: 保护本次换季, 一次性消耗
           else { uS.score = 0; uS.arrows = 100; uS.sp = {}; }               // 无卡: 积分清零, 特殊箭清空, 箭矢补给100支(同新账号)
           uS.seasonIdx = curIdx;
