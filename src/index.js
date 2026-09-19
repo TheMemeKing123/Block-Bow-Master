@@ -57,6 +57,12 @@ const NAME_RE = /[<>"'\/\\]/;
 const ADMIN_API = ['/api/admin/'];
 const AUTH_API = ['/api/me', '/api/logout', '/api/online', '/api/users/public', '/api/score', '/api/settings/title'];
 const SP_TYPES = { track: 8, split: 5, ice: 3, boom: 8, shadow: 10 };
+/* ===== 赛季系统: 每7天自动换赛季; 切换时积分/箭矢/特殊箭清零(🛡️防丢卡可保护) ===== */
+const SEASON_EPOCH = Date.UTC(2026, 8, 21, 0, 0, 0);   // 2026-09-21 00:00 UTC 第1赛季开启
+const SEASON_MS = 7 * 24 * 3600 * 1000;
+const CARD_COST = 5000;   // 防丢卡售价(很贵: 赛季保护属高价值道具)
+function seasonIdx(){ const n = Date.now(); return n < SEASON_EPOCH ? 0 : 1 + Math.floor((n - SEASON_EPOCH) / SEASON_MS); }
+function seasonLeft(){ const n = Date.now(); if (n < SEASON_EPOCH) return SEASON_EPOCH - n; return SEASON_MS - ((n - SEASON_EPOCH) % SEASON_MS); }
 
 export default {
   async fetch(request, env) {
@@ -89,8 +95,24 @@ async function apiBody(request, env, url) {
     await flushDirty(env);   // 先刷掉上次积攒的脏写入
     const body = await readBody(request);
     const token = request.headers.get('X-User-Token');
-    const me = await userFromToken(env, token);
+    const me0 = await userFromToken(env, token);
+    let me = me0;
     const path = url.pathname;
+
+    /* 赛季懒结算: 账号记录的赛季号与当前不一致时, 自动处理新赛季开始 */
+    if (me) {
+      const curIdx = seasonIdx();
+      if ((me.seasonIdx|0) !== curIdx) {
+        const uS = await readUser(env, me.name);
+        if (uS) {
+          if ((uS.anticard|0) > 0) { uS.anticard = (uS.anticard|0) - 1; }   // 🛡️防丢卡: 保护本次换季, 一次性消耗
+          else { uS.score = 0; uS.arrows = 100; uS.sp = {}; }               // 无卡: 积分清零, 特殊箭清空, 箭矢补给100支(同新账号)
+          uS.seasonIdx = curIdx;
+          await writeUser(env, me.name, uS);
+          me = Object.assign({}, uS, { name: me0.name });
+        }
+      }
+    }
 
     /* ---- 无需登录的接口 ---- */
     if (path === '/api/ai-proxy' && request.method === 'POST') {
@@ -131,7 +153,7 @@ async function apiBody(request, env, url) {
       const exists = await readUser(env, name);
       if (exists) return json({ error: '这个账号已经被注册过了' }, 400);
       const salt = hex(crypto.getRandomValues(new Uint8Array(8)));
-      const rec = { salt, pass: await hashPass(pass, salt), score: 0, arrows: 100, banned: false, isAdmin: false, isDeveloper: false, reg: Date.now(), lastLogin: 0, sp: {}, friends: [], requests: [], sent: [], dm: [] };
+      const rec = { salt, pass: await hashPass(pass, salt), score: 0, arrows: 100, banned: false, isAdmin: false, isDeveloper: false, reg: Date.now(), lastLogin: 0, sp: {}, friends: [], requests: [], sent: [], dm: [], seasonIdx: seasonIdx(), anticard: 0 };
       await writeUser(env, name, rec);
       const u = { ...rec, _name: name };
       return json({ token: await issueToken(env, name), user: pubUser(u) });
@@ -229,6 +251,18 @@ async function apiBody(request, env, url) {
       u.sp[type] = (u.sp[type]|0) - 1;
       await writeUser(env, me.name, u);
       return json({ left: u.sp[type]|0 });
+    }
+    if (path === '/api/card/buy' && request.method === 'POST') {
+      const u = await readUser(env, me.name);
+      if (!u) return json({ error: '账号不存在' }, 400);
+      if ((u.score|0) < CARD_COST) return json({ error: '积分不足，还差 ' + (CARD_COST - (u.score|0)) + ' 分', score: u.score|0 }, 400);
+      u.score = (u.score|0) - CARD_COST;
+      u.anticard = (u.anticard|0) + 1;
+      await writeUser(env, me.name, u);
+      return json({ ok: true, score: u.score|0, anticard: u.anticard|0 });
+    }
+    if (path === '/api/season' && request.method === 'GET') {
+      return json({ idx: seasonIdx(), left: seasonLeft(), epoch: SEASON_EPOCH, ms: SEASON_MS, cardCost: CARD_COST });
     }
     if (path === '/api/best' && request.method === 'POST') {
       const v = String(body.variant || '');

@@ -241,6 +241,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <div data-page-node-id="mXF3VMIz8ZjHGhno8OO5Wx" class="welcome"><!--pnid:oRccaSsMM3o8kaHrKzaLXU-->欢迎回来，<b data-page-node-id="EHVbT1DtKusDnlxqxi4xJo" id="lob-name"></b><!--pnid:ReuViiiAmxTtQr8rMw1FFU-->！</div>
     <div data-page-node-id="ONdJqj5bhzekQdWGaoESIF" class="stats">当前总分：<b data-page-node-id="ta7YNDCV9NABIdiQjqc2P6" id="lob-score">0</b> <b id="lob-rank" style="font-size:13px"></b></div>
     <div class="stats">箭矢：<b id="lob-arrow">--</b> 🪶 <button class="mc-btn gold" id="btn-shop" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">商城</button> <button class="mc-btn gold" id="btn-skin" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🎽皮肤</button></div>
+    <div id="lob-season" style="font-size:12px;color:#c9b48a;text-shadow:1px 1px 0 #000;padding:2px 0">🏆 赛季加载中…</div>
     <div data-page-node-id="SVuf4MLQm2CQgVAHyp3YLj" class="divider"></div>
     <button data-page-node-id="EIPv6bJzrz1pm5EWPDfjYq" class="mc-btn big" id="btn-solo"><!--pnid:KAIIS6OzBXdgbFDI00MNwm-->单人游戏</button>
     <button data-page-node-id="Og8JJCWHfBAKq4XKTEyg5P" class="mc-btn big" id="btn-create"><!--pnid:9FKatpjVXTdFZtppLMknR3-->多人游戏</button>
@@ -658,9 +659,19 @@ function bindShop(){
   window.renderSpShop = function(){
     const box = $('sp-shop'); if(!box) return;
     const u = AUTH.user; const sp = (u && u.sp) || {};
-    box.innerHTML = Object.keys(SP_INFO).map(function(t){
+    const ac = (u.anticard|0);
+    let cardHtml = '<div style="display:flex;align-items:center;gap:6px;margin:5px 0"><span style="flex:1;font-size:12px;line-height:1.35">🛡️ 赛季防丢卡<br><span style="color:#888;font-size:11px">换赛季时保护积分/箭矢/特殊箭不被清空（一次性，很贵！）</span></span><span style="color:#ffe08a;font-size:12px;min-width:50px;text-align:right">5000分</span><button class="mc-btn small" data-cardbuy="1" style="min-width:64px;padding:3px 6px;font-size:11px">买1 (余' + ac + ')</button></div>';
+    box.innerHTML = cardHtml + Object.keys(SP_INFO).map(function(t){
       return '<div style="display:flex;align-items:center;gap:6px;margin:5px 0"><span style="flex:1;font-size:12px;line-height:1.35">' + SP_INFO[t].n + '<br><span style="color:#888;font-size:11px">' + SP_INFO[t].e + '</span></span><span style="color:#ffe08a;font-size:12px;min-width:40px;text-align:right">' + SP_INFO[t].p + '分</span><button class="mc-btn small" data-spbuy="' + t + '" style="min-width:64px;padding:3px 6px;font-size:11px">买1 (余' + (sp[t]||0) + ')</button></div>';
     }).join('');
+    const cb = box.querySelector('[data-cardbuy]');
+    if(cb) cb.onclick = function(){
+      var uu = AUTH.user; if(!uu) return;
+      api('/api/card/buy', { method:'POST', body: {} }).then(function(d){
+        if(d && d.ok){ uu.score = d.score|0; uu.anticard = d.anticard|0; refreshShop(); renderSpShop(); toast('🛡️ 防丢卡到手（余' + uu.anticard + '张）· 下次换赛季积分被保护', true); }
+        else if(d && d.error){ toast(d.error, false); }
+      }).catch(function(){ toast('购买失败', false); });
+    };
     box.querySelectorAll('[data-spbuy]').forEach(function(b){
       b.onclick = function(){
         var type = b.getAttribute('data-spbuy'); var u = AUTH.user; if(!u) return;
@@ -782,6 +793,7 @@ function enterLobby(){
   $('lob-name').textContent = displayName(s);
   $('lob-score').textContent = getScore(s);
   refreshRankBadge();
+  refreshSeason();
   try{ if(sessionStorage.getItem('mcBow_arrow') !== null) AUTH.user.arrows = +sessionStorage.getItem('mcBow_arrow'); }catch(e){}
   updateArrowUI();
   $('btn-admin').style.display = (AUTH.user && (AUTH.user.isAdmin||AUTH.user.isDeveloper)) ? '' : 'none';
@@ -1322,6 +1334,23 @@ function banner(main, sub){
   b.classList.add('show');
   clearTimeout(bannerTimer);
   bannerTimer = setTimeout(()=>b.classList.remove('show'), 3200);
+}
+/* 赛季信息: 与服务端同一公式(客户端显示用, 重置以服务端为准) */
+function seasonInfo(){
+  const EPOCH = 1789948800000, MS = 7*24*3600*1000, n = Date.now();
+  if (n < EPOCH){ const l = Math.ceil((EPOCH - n)/3600000); return { idx: 0, txt: '🏁 第1赛季将于 ' + new Date(EPOCH).toLocaleDateString() + ' 开启 · 剩余 ' + l + ' 小时' }; }
+  const idx = 1 + Math.floor((n - EPOCH) / MS);
+  const left = MS - ((n - EPOCH) % MS), d = Math.floor(left/86400000), h = Math.floor(left%86400000/3600000);
+  return { idx: idx, txt: '🏆 第' + idx + '赛季 · 剩余 ' + d + '天' + h + '小时 · 换季积分清零(🛡️防丢卡可保护)' };
+}
+function refreshSeason(){
+  const el = $('lob-season'); if(!el) return;
+  const si = seasonInfo();
+  el.textContent = si.txt;
+  let last = null;
+  try{ last = localStorage.getItem('mcBow_season'); }catch(e){}
+  if (last !== null && parseInt(last) < si.idx){ banner('🎉 第' + si.idx + '赛季开启！', '积分与特殊箭已按赛季规则处理（🛡️防丢卡可保护）'); }
+  try{ localStorage.setItem('mcBow_season', String(si.idx)); }catch(e){}
 }
 /* 段位: 按累计积分定段, 大厅与游戏内记分板展示 */
 function rankOf(score){

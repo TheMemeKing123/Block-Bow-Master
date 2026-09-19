@@ -170,6 +170,7 @@ function pubUser(u) {
     isAdmin: !!u.isAdmin, isDeveloper: !!u.isDeveloper, arrows: (u.arrows === undefined ? 100 : (u.arrows | 0)),
     sp: u.sp || {},
     best: u.best || {},
+    anticard: u.anticard || 0,
     reg: u.reg || 0, lastLogin: u.lastLogin || 0, online: u._online || false,
   };
 }
