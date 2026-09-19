@@ -299,7 +299,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     </div>
     <div data-page-node-id="Lpsm69udr1kjrlvCt1xpgG" id="hud">
     <div data-page-node-id="qggSZtsy9XUGqRZiOeT8S1" id="scoreboard"></div>
-    <div data-page-node-id="dSFIOYx1Je3LydiZ5hYiqD" id="topbar"><button id="btn-pause-touch" style="pointer-events:auto;cursor:pointer;padding:7px 14px;font-size:13px;font-family:inherit;color:#fff;border:2px solid #000;background:linear-gradient(#5a6b8b,#303c55);text-shadow:1px 1px 0 #333">⏸ 暂停</button><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="hud-arrow" style="background:rgba(0,0,0,.45);border:2px solid rgba(0,0,0,.75);padding:6px 12px;font-size:13px;text-shadow:1px 1px 0 #000;color:#9fd4ff">🪶 --</span><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="room-tag"></span><span id="mode-timer" style="display:none;background:rgba(0,0,0,.55);border:2px solid #ffb347;padding:6px 12px;font-size:14px;color:#ffb347;text-shadow:1px 1px 0 #000"></span><button data-page-node-id="Ew8MzHt6fvWQUqM0iFisxA" id="btn-exit"><!--pnid:H6WGWhhgnmqvXYgKCdfkat-->退出</button></div>
+    <div data-page-node-id="dSFIOYx1Je3LydiZ5hYiqD" id="topbar"><button id="btn-pause-touch" style="pointer-events:auto;cursor:pointer;padding:7px 14px;font-size:13px;font-family:inherit;color:#fff;border:2px solid #000;background:linear-gradient(#5a6b8b,#303c55);text-shadow:1px 1px 0 #333">⏸ 暂停</button><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="hud-arrow" style="background:rgba(0,0,0,.45);border:2px solid rgba(0,0,0,.75);padding:6px 12px;font-size:13px;text-shadow:1px 1px 0 #000;color:#9fd4ff">🪶 --</span><span data-page-node-id="n8yq3G08k1jklnrtNaZltM" id="room-tag"></span><span id="mode-timer" style="display:none;background:rgba(0,0,0,.55);border:2px solid #ffb347;padding:6px 12px;font-size:14px;color:#ffb347;text-shadow:1px 1px 0 #000"></span><button data-page-node-id="Ew8MzHt6fvWQUqM0iFisxA" id="btn-sound" style="pointer-events:auto;cursor:pointer;padding:7px 14px;font-size:13px;font-family:inherit;color:#fff;border:2px solid #000;background:linear-gradient(#5a6b8b,#303c55);text-shadow:1px 1px 0 #333">🔊</button><button data-page-node-id="Ew8MzHt6fvWQUqM0iFisxA" id="btn-exit"><!--pnid:H6WGWhhgnmqvXYgKCdfkat-->退出</button></div>
     <div id="sp-select"></div>
     <div data-page-node-id="EGq8y3GPBkwVWKhLbK04WA" id="crosshair"></div>
     <div class="overlay" id="wait-overlay">
@@ -545,6 +545,7 @@ $('confirm-no').onclick = ()=>{ $('confirm-modal').style.display='none'; confirm
 let AC = null;
 function audio(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC && AC.state==='suspended') AC.resume(); return AC; }
 function sfx(type){
+  if(window.__sfxMuted) return;   // 游戏内静音开关(见顶栏 🔊 按钮, 记忆在 localStorage)
   const ac = audio(); if(!ac) return;
   try{
     const t = ac.currentTime, g = ac.createGain(); g.connect(ac.destination);
@@ -1787,6 +1788,19 @@ function bindInput(){
       else KEYS[k] = true;
     }
   });
+  /* 音量: 静音开关(localStorage记忆), 按钮在游戏顶栏 */
+  const bsd = $('btn-sound');
+  if(bsd){
+    const setMute = function(m){
+      window.__sfxMuted = m;
+      try{ localStorage.setItem('mcBow_sfxMuted', m ? '1' : '0'); }catch(e){}
+      bsd.textContent = m ? '🔇' : '🔊';
+    };
+    let sfxMuted = false;
+    try{ sfxMuted = localStorage.getItem('mcBow_sfxMuted') === '1'; }catch(e){}
+    setMute(sfxMuted);
+    bsd.onclick = function(){ setMute(!window.__sfxMuted); if(!window.__sfxMuted) sfx('ui'); toast(window.__sfxMuted ? '🔇 已静音' : '🔊 音效开启', true); };
+  }
   $('btn-exit').onclick = ()=>exitGame();
   $('btn-resume').onclick = ()=>{ $('pause-overlay').classList.remove('show'); tryLock(); };
   $('btn-pause-exit').onclick = ()=>exitGame();
