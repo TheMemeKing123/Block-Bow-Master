@@ -2661,7 +2661,8 @@ function openLeaderboard(){
     list.innerHTML = '<div style="color:#888;padding:8px">加载失败，请稍后再试</div>';
   });
 }
-/* ---------- 单人模式选择 ----------
+/* ---------- 邀请好友选择 ---------- */
+function openInvitePick(){
   const m = $('invite-pick');
   const list = $('invite-list');
   const friends = (FB && FB.friends) ? FB.friends : [];
