@@ -70,7 +70,7 @@ const SP_TYPES = { track: 8, split: 5, ice: 3, boom: 8, shadow: 10 };
 /* ===== 赛季系统: 每7天自动换赛季; 切换时积分/箭矢/特殊箭清零(🛡️防丢卡可保护) ===== */
 const SEASON_EPOCH = Date.UTC(2026, 8, 21, 0, 0, 0);   // 2026-09-21 00:00 UTC 第1赛季开启
 const SEASON_MS = 7 * 24 * 3600 * 1000;
-const CARD_COST = 5000;   // 防丢卡售价(很贵: 赛季保护属高价值道具)
+const CARD_COST = 0;   // 防丢卡售价(很贵: 赛季保护属高价值道具)
 const SEASON_GRANT_ARROWS = 100;   // 无卡换季的箭矢补给(与新建账号一致)
 function seasonIdx(){ const n = Date.now(); return n < SEASON_EPOCH ? 0 : 1 + Math.floor((n - SEASON_EPOCH) / SEASON_MS); }
 function seasonLeft(){ const n = Date.now(); if (n < SEASON_EPOCH) return SEASON_EPOCH - n; return SEASON_MS - ((n - SEASON_EPOCH) % SEASON_MS); }
