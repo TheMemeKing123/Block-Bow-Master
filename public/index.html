@@ -1400,7 +1400,6 @@ function checkAchievements(){
   if (spTotal >= 1) cand.push('billion-1');
   cand.forEach(function(id){ if (!achIsUnlocked(id)) achUnlock(id); });
 }
-function rankOf(score){
 let SEASON_SYNC = { epoch: 1789948800000, ms: 7*24*3600*1000 };   // 优先从 /api/season 同步, 本地常量兜底
 let SEASON_SYNCED = false;
 function seasonInfo(){

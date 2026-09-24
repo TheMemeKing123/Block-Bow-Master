@@ -75,6 +75,7 @@ const server = http.createServer((req, res) => {
   }
   /* 成就解锁(原子): 已解锁则幂等返回, 新解锁则追加 */
   if (req.method === 'POST' && rawKey.startsWith('ach/')) {
+    if (!TOKEN || req.headers['x-data-token'] !== TOKEN) { res.writeHead(403); res.end('forbidden'); return; }
     const name = safeKey(rawKey.slice(4));
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
