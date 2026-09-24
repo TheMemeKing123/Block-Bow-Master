@@ -172,6 +172,7 @@ function pubUser(u) {
     sp: u.sp || {},
     best: u.best || {},
     anticard: u.anticard || 0,
+    ach: u.ach || [],
     reg: u.reg || 0, lastLogin: u.lastLogin || 0, online: u._online || false,
   };
 }

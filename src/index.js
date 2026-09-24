@@ -170,7 +170,7 @@ async function apiBody(request, env, url) {
       const exists = await readUser(env, name);
       if (exists) return json({ error: '这个账号已经被注册过了' }, 400);
       const salt = hex(crypto.getRandomValues(new Uint8Array(8)));
-      const rec = { salt, pass: await hashPass(pass, salt), score: 0, arrows: 100, banned: false, isAdmin: false, isDeveloper: false, reg: Date.now(), lastLogin: 0, sp: {}, friends: [], requests: [], sent: [], dm: [], seasonIdx: seasonIdx(), anticard: 0 };
+      const rec = { salt, pass: await hashPass(pass, salt), score: 0, arrows: 100, banned: false, isAdmin: false, isDeveloper: false, reg: Date.now(), lastLogin: 0, sp: {}, friends: [], requests: [], sent: [], dm: [], seasonIdx: seasonIdx(), anticard: 0, ach: [] };
       await writeUser(env, name, rec);
       const u = { ...rec, _name: name };
       return json({ token: await issueToken(env, name), user: pubUser(u) });
@@ -255,6 +255,12 @@ async function apiBody(request, env, url) {
       try { const r3 = await dsFetch(env, '/cardbuy/' + encodeURIComponent('u:' + me.name), 'POST', { cost: CARD_COST }); d3 = await r3.json(); } catch (e) { d3 = null; }
       if (d3 && d3.ok) return json({ ok: true, score: d3.score|0, anticard: d3.anticard|0 });
       return json({ error: (d3 && d3.error) || '购买服务暂时不可用，请稍后再试', score: d3 ? (d3.score|0) : 0 }, 400);
+    }
+    if (path === '/api/ach/unlock' && request.method === 'POST') {
+      const r5 = await dsFetch(env, '/ach/' + encodeURIComponent('u:' + me.name), 'POST', { id: String(body.id || '') });
+      const d5 = await r5.json();
+      if (d5.ok) { if (d5.ach) me.ach = d5.ach; return json({ ok: true, unlocked: !!d5.unlocked, ach: d5.ach || [] }); }
+      return json({ error: '服务暂时不可用' }, 502);
     }
     if (path === '/api/leaderboard' && request.method === 'GET') {
       const online = await presenceList(env);
