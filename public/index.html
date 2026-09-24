@@ -1402,16 +1402,20 @@ function achUnlockBatch(ids){
 }
 function checkAchievements(){
   if (!AUTH.user) return;
+  const inGame = (typeof G !== 'undefined' && G && G.active);
+  const hits = inGame ? (G.hits|0) : 0, shots = inGame ? (G.shots|0) : 0;
+  const combo = inGame ? (G.combo|0) : 0, roundScore = inGame ? (G.roundScore|0) : 0;
+  const variant = inGame ? (G.variant || 'normal') : '';
   const cand = [];
-  if ((G.hits|0) >= 1) cand.push('first-hit');
-  if ((G.combo|0) >= 5) cand.push('combo-5');
-  if ((G.combo|0) >= 10) cand.push('combo-10');
-  if ((G.shots|0) >= 10 && (G.hits|0) === (G.shots|0)) cand.push('perfect-round');
-  if ((G.roundScore|0) >= 100) cand.push('round-100');
-  if ((G.roundScore|0) >= 300) cand.push('round-300');
-  if ((G.best||{}).rush30 >= 200) cand.push('rush-200');
-  if ((G.best||{}).endless >= 300) cand.push('endless-300');
-  if (G.variant === 'precision' && (G.roundScore|0) >= 100) cand.push('precision-100');
+  if (hits >= 1) cand.push('first-hit');
+  if (combo >= 5) cand.push('combo-5');
+  if (combo >= 10) cand.push('combo-10');
+  if (shots >= 10 && hits === shots) cand.push('perfect-round');
+  if (roundScore >= 100) cand.push('round-100');
+  if (roundScore >= 300) cand.push('round-300');
+  if ((AUTH.user.best||{}).rush30 >= 200) cand.push('rush-200');
+  if ((AUTH.user.best||{}).endless >= 300) cand.push('endless-300');
+  if (variant === 'precision' && roundScore >= 100) cand.push('precision-100');
   if ((AUTH.user.score|0) >= 12000) cand.push('rank-diamond');
   if ((AUTH.user.score|0) >= 100000) cand.push('rank-king');
   if ((AUTH.user.anticard|0) >= 1) cand.push('anticard-1');
