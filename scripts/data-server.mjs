@@ -73,6 +73,39 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+  /* 成就解锁(原子): 已解锁则幂等返回, 新解锁则追加 */
+  if (req.method === 'POST' && rawKey.startsWith('ach/')) {
+    if (!TOKEN || req.headers['x-data-token'] !== TOKEN) { res.writeHead(403); res.end('forbidden'); return; }
+    const name = safeKey(rawKey.slice(4));
+    if (!name) { res.writeHead(400); res.end('no name'); return; }
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 100000) req.destroy(); });
+    req.on('end', () => {
+      let a = {};
+      try { a = JSON.parse(body || '{}'); } catch (e) {}
+      let ids = [];
+      if (Array.isArray(a.ids)) ids = a.ids.slice(0, 20).map(function(x){ return String(x || '').slice(0, 24).replace(/[^a-z0-9_-]/gi, ''); }).filter(Boolean);
+      const sid = String(a.id || '').slice(0, 24).replace(/[^a-z0-9_-]/gi, '');
+      if (sid && ids.indexOf(sid) < 0) ids.push(sid);
+      if (!ids.length) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: 'no id' })); return; }
+      const f = path.join(DATA_DIR, name + '.json');
+      if (!fs.existsSync(f)) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '账号不存在' })); return; }
+      let rec = {};
+      try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
+      if (!rec.ach) rec.ach = [];
+      let unlocked = false;
+      let dirty = false;
+      for (var i2 = 0; i2 < ids.length; i2++) {
+        if (rec.ach.indexOf(ids[i2]) < 0) { rec.ach.push(ids[i2]); dirty = true; }
+      }
+      rec.ach = rec.ach.slice(-200);
+      if (dirty) { try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) { res.writeHead(500); res.end('write failed'); return; } }
+      unlocked = dirty;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: 1, unlocked: unlocked, ach: rec.ach }));
+    });
+    return;
+  }
   /* 记分(原子): 服务端校验反作弊(12m/单次上限)并同步读改写 */
   if (req.method === 'POST' && rawKey.startsWith('score/')) {
     if (!TOKEN || req.headers['x-data-token'] !== TOKEN) { res.writeHead(403); res.end('forbidden'); return; }

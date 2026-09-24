@@ -240,7 +240,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <h1 data-page-node-id="Jm3jtCrwi3W18FQvgCo0cG" class="game-title" style="font-size:30px"><!--pnid:1S5xXz22HXOO5JGNYBNm3R-->主 菜 单</h1>
     <div data-page-node-id="mXF3VMIz8ZjHGhno8OO5Wx" class="welcome"><!--pnid:oRccaSsMM3o8kaHrKzaLXU-->欢迎回来，<b data-page-node-id="EHVbT1DtKusDnlxqxi4xJo" id="lob-name"></b><!--pnid:ReuViiiAmxTtQr8rMw1FFU-->！</div>
     <div data-page-node-id="ONdJqj5bhzekQdWGaoESIF" class="stats">当前总分：<b data-page-node-id="ta7YNDCV9NABIdiQjqc2P6" id="lob-score">0</b> <b id="lob-rank" style="font-size:13px"></b></div>
-    <div class="stats">箭矢：<b id="lob-arrow">--</b> 🪶 <button class="mc-btn gold" id="btn-shop" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">商城</button> <button class="mc-btn gold" id="btn-skin" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🎽皮肤</button> <button class="mc-btn gold" id="btn-lb" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🏆排行</button></div>
+    <div class="stats">箭矢：<b id="lob-arrow">--</b> 🪶 <button class="mc-btn gold" id="btn-shop" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">商城</button> <button class="mc-btn gold" id="btn-skin" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🎽皮肤</button> <button class="mc-btn gold" id="btn-lb" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🏆排行</button> <button class="mc-btn gold" id="btn-ach" style="min-width:60px;padding:2px 8px;font-size:12px;margin-top:4px">🎖️成就</button></div>
     <div id="lob-season" style="font-size:12px;color:#c9b48a;text-shadow:1px 1px 0 #000;padding:2px 0">🏆 赛季加载中…</div>
     <div data-page-node-id="SVuf4MLQm2CQgVAHyp3YLj" class="divider"></div>
     <button data-page-node-id="EIPv6bJzrz1pm5EWPDfjYq" class="mc-btn big" id="btn-solo"><!--pnid:KAIIS6OzBXdgbFDI00MNwm-->单人游戏</button>
@@ -443,6 +443,13 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
   <div id="invite-list" style="max-height:240px;overflow-y:auto"></div>
   <div style="margin-top:8px;color:#888;font-size:11px">灰色 = 不在线 · 仅在线好友能收到邀请</div>
 </div></div>
+<!-- 成就面板弹层 --><div id="ach-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.7); z-index:60; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:340px;text-align:center">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <b>🎖️ 成就</b><button class="mc-btn" id="ach-close" style="min-width:44px">✕</button>
+    </div>
+    <div id="ach-list" style="max-height:320px;overflow-y:auto;text-align:left"></div>
+    <div id="ach-count" style="margin-top:8px;color:#c9b48a;font-size:12px"></div>
+  </div></div>
 <!-- 全服排行榜弹层 --><div id="lb-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.7); z-index:60; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:340px;text-align:center">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <b>🏆 全服排行榜</b><button class="mc-btn" id="lb-close" style="min-width:44px">✕</button>
@@ -675,7 +682,7 @@ function bindShop(){
     if(cb) cb.onclick = function(){
       var uu = AUTH.user; if(!uu) return;
       api('/api/card/buy', { method:'POST', body: {} }).then(function(d){
-        if(d && d.ok){ uu.score = d.score|0; uu.anticard = d.anticard|0; refreshShop(); renderSpShop(); toast('🛡️ 防丢卡到手（余' + uu.anticard + '张）· 下次换赛季积分被保护', true); }
+        if(d && d.ok){ uu.score = d.score|0; uu.anticard = d.anticard|0; refreshShop(); renderSpShop(); toast('🛡️ 防丢卡到手（余' + uu.anticard + '张）· 下次换赛季积分被保护', true); checkAchievements(); }
         else if(d && d.error){ toast(d.error, false); }
       }).catch(function(){ toast('购买失败', false); });
     };
@@ -686,7 +693,7 @@ function bindShop(){
         api('/api/sp/buy', { method:'POST', body: { type: type, count: 1 } }).then(function(d){
           if(d && d.error){ toast('⚠ ' + d.error, false); return; }
           if(AUTH.user){ AUTH.user.score = d.score|0; if(!AUTH.user.sp) AUTH.user.sp = {}; AUTH.user.sp[type] = d.left|0; }
-          refreshShop(); renderSpShop(); toast(SP_INFO[type].n + ' 到手 ×' + (d.left|0), true);
+          refreshShop(); renderSpShop(); toast(SP_INFO[type].n + ' 到手 ×' + (d.left|0), true); checkAchievements();
         }).catch(function(e){ toast('购买失败：' + e.message, false); });
       };
     });
@@ -948,6 +955,8 @@ $('btn-all-clear').onclick = ()=>{
 bindShop();
   const blb = $('btn-lb');
   if(blb) blb.onclick = function(){ sfx('ui'); openLeaderboard(); };
+  const bac = $('btn-ach');
+  if(bac) bac.onclick = function(){ sfx('ui'); openAchPanel(); };
   const bpt = $('btn-pause-touch');
   if(bpt) bpt.onclick = () => { sfx('ui'); $('pause-overlay').classList.toggle('show'); };
   const bif = $('btn-invite-friend');
@@ -1344,7 +1353,77 @@ function banner(main, sub){
   clearTimeout(bannerTimer);
   bannerTimer = setTimeout(()=>b.classList.remove('show'), 3200);
 }
-/* 赛季信息: 与服务端同一公式(客户端显示用, 重置以服务端为准) */
+/* ---------- 成就系统 ---------- */
+const ACH_DEFS = [
+  { id:'first-hit',   emoji:'🎯', name:'初次命中',   desc:'完成第一次计分命中' },
+  { id:'combo-5',     emoji:'🔥', name:'连击高手',   desc:'达成 5 连击' },
+  { id:'combo-10',    emoji:'⚡', name:'连击大师',   desc:'完成 10 连击' },
+  { id:'perfect-round', emoji:'💯', name:'百发百中', desc:'单局射箭 10 支全部命中' },
+  { id:'round-100',   emoji:'🎇', name:'神射手',     desc:'单局得分达到 100' },
+  { id:'round-300',   emoji:'🌟', name:'狙击之王',   desc:'单局得分达到 300' },
+  { id:'rush-200',    emoji:'⏱️', name:'狂射高手',   desc:'30秒狂射个人最佳达到 200' },
+  { id:'endless-300', emoji:'♾️', name:'无限行者',   desc:'无限模式个人最佳达到 300' },
+  { id:'precision-100', emoji:'🎯', name:'精准大师', desc:'精准挑战单局得分达到 100' },
+  { id:'billion-1',   emoji:'🛒', name:'军火商',     desc:'在商城购买第一支特殊箭' },
+  { id:'anticard-1',  emoji:'🛡️', name:'未雨绸缪',   desc:'购买赛季防丢卡' },
+  { id:'rank-diamond', emoji:'💎', name:'璀璨新星',  desc:'达到钻石段位(累计12000分)' },
+  { id:'rank-king',   emoji:'👑', name:'登顶王者',   desc:'达到王者段位(累计100000分)' }
+];
+function achIsUnlocked(id){ const u = AUTH.user; return !!(u && u.ach && u.ach.indexOf(id) >= 0); }
+const ACH_PENDING = {};
+function achUnlock(id){
+  if (achIsUnlocked(id) || ACH_PENDING[id]) return;
+  ACH_PENDING[id] = true;
+  const def = ACH_DEFS.find(function(d){ return d.id === id; });
+  api('/api/ach/unlock', { method:'POST', body:{ id: id } }).then(function(d){
+    if (d && d.ok){
+      delete ACH_PENDING[id];
+      if (AUTH.user) AUTH.user.ach = d.ach || [];
+      if (d.unlocked && def) banner(def.emoji + ' 成就解锁：' + def.name, def.desc);
+    } else { delete ACH_PENDING[id]; }
+  }).catch(function(){ delete ACH_PENDING[id]; });
+}
+/* 批量上报(合并单帧内的多个解锁, 减少请求) */
+function achUnlockBatch(ids){
+  const fresh = ids.filter(function(id){ return !achIsUnlocked(id) && !ACH_PENDING[id]; });
+  if (!fresh.length) return;
+  fresh.forEach(function(id){ ACH_PENDING[id] = true; });
+  api('/api/ach/unlock-batch', { method:'POST', body:{ ids: fresh } }).then(function(d){
+    fresh.forEach(function(id){ delete ACH_PENDING[id]; });
+    if (d && d.ok){
+      if (AUTH.user) AUTH.user.ach = d.ach || [];
+      ACH_DEFS.forEach(function(def){
+        if (fresh.indexOf(def.id) >= 0 && (AUTH.user.ach || []).indexOf(def.id) >= 0){
+          banner(def.emoji + ' 成就解锁：' + def.name, def.desc);
+        }
+      });
+    }
+  }).catch(function(){ fresh.forEach(function(id){ delete ACH_PENDING[id]; }); });
+}
+function checkAchievements(){
+  if (!AUTH.user) return;
+  const inGame = (typeof G !== 'undefined' && G && G.active);
+  const hits = inGame ? (G.hits|0) : 0, shots = inGame ? (G.shots|0) : 0;
+  const combo = inGame ? (G.combo|0) : 0, roundScore = inGame ? (G.roundScore|0) : 0;
+  const variant = inGame ? (G.variant || 'normal') : '';
+  const cand = [];
+  if (hits >= 1) cand.push('first-hit');
+  if (combo >= 5) cand.push('combo-5');
+  if (combo >= 10) cand.push('combo-10');
+  if (shots >= 10 && hits === shots) cand.push('perfect-round');
+  if (roundScore >= 100) cand.push('round-100');
+  if (roundScore >= 300) cand.push('round-300');
+  if ((AUTH.user.best||{}).rush30 >= 200) cand.push('rush-200');
+  if ((AUTH.user.best||{}).endless >= 300) cand.push('endless-300');
+  if (variant === 'precision' && roundScore >= 100) cand.push('precision-100');
+  if ((AUTH.user.score|0) >= 12000) cand.push('rank-diamond');
+  if ((AUTH.user.score|0) >= 100000) cand.push('rank-king');
+  if ((AUTH.user.anticard|0) >= 1) cand.push('anticard-1');
+  let spTotal = 0; const sp = AUTH.user.sp || {};
+  Object.keys(sp).forEach(function(k){ spTotal += sp[k]|0; });
+  if (spTotal >= 1) cand.push('billion-1');
+  achUnlockBatch(cand);
+}
 let SEASON_SYNC = { epoch: 1789948800000, ms: 7*24*3600*1000 };   // 优先从 /api/season 同步, 本地常量兜底
 let SEASON_SYNCED = false;
 function seasonInfo(){
@@ -1489,7 +1568,7 @@ function startGame(mode, variant){
   G = {
     active:true, mode, mySlot, M,
     arrowType:'normal', hiddenUntil:0, sp:((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.sp) || {}),
-    variant: (['normal','endless','precision','rush30'].indexOf(variant) >= 0 ? variant : 'normal'), deadline: 0, mvSpeed: 1.4, best: ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}),
+    variant: (['normal','endless','precision','rush30'].indexOf(variant) >= 0 ? variant : 'normal'), deadline: 0, mvSpeed: 1.4, get best(){ return ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}); },
     yaw:0, pitch:0, draw:0, drawing:false, aiming:false, scoping:false,
     rightBtn:false, everLocked:false,
     recoil:0, myName: displayName(session), myScore: getScore(session), roundScore:0, combo:0, lastHitT:0, missCombo:0, shots:0, hits:0, misses:0, bestCombo:0,
@@ -1906,6 +1985,7 @@ function exitGame(){
   show('screen-lobby');
   if (AUTH.user) { $('lob-score').textContent = (AUTH.user.score|0); refreshRankBadge(); }
   updateArrowUI();
+  if (AUTH.user) checkAchievements();   // 登录/退出大厅路径的积分变动补解锁
   G = null;
 }
 
@@ -2005,6 +2085,7 @@ function onHit(arrow, target, r){
     }
     G.roundScore = (G.roundScore|0) + pts;   // 本局得分（结算/排行榜/个人最佳都用它）
     G.hits = (G.hits|0) + 1;   // 本局命中数统计
+    checkAchievements();   // 成就条件检查
     addScore(G.session, pts);   // 中心服务器记账（账号总积分）
     if(G.variant === 'endless'){   // 无限模式: 命中提速+瞬移(房主权威), 个人最佳各记各的
       if(G.mode !== 'multi' || NET.isHost){
@@ -2638,6 +2719,23 @@ function openJoinPass(code){
   $('join-pass-ok').onclick = go;
   $('join-pass-cancel').onclick = () => { m.style.display = 'none'; toast('已取消加入', false); };
   inp.onkeydown = (e) => { if(e.key === 'Enter') go(); };
+}
+/* ---------- 成就面板 ---------- */
+function openAchPanel(){
+  const m = $('ach-modal'); if(!m) return;
+  const list = $('ach-list');
+  const unlocked = AUTH.user ? (AUTH.user.ach || []) : [];
+  list.innerHTML = ACH_DEFS.map(function(d){
+    const got = unlocked.indexOf(d.id) >= 0;
+    return '<div style="display:flex;gap:8px;align-items:center;padding:5px 8px;margin:3px 0;background:' + (got ? '#24401f' : '#1c1c1c') + ';border-radius:4px;font-size:13px;opacity:' + (got ? '1' : '.55') + '">' +
+      '<span style="font-size:18px">' + d.emoji + '</span>' +
+      '<span style="flex:1"><b>' + d.name + '</b><br><span style="color:#888;font-size:11px">' + d.desc + '</span></span>' +
+      '<span>' + (got ? '✅' : '🔒') + '</span></div>';
+  }).join('');
+  const cnt = ACH_DEFS.filter(function(d){ return unlocked.indexOf(d.id) >= 0; }).length;
+  $('ach-count').textContent = '已解锁 ' + cnt + ' / ' + ACH_DEFS.length;
+  m.style.display = 'flex';
+  $('ach-close').onclick = function(){ m.style.display = 'none'; };
 }
 /* ---------- 全服排行榜 ---------- */
 function openLeaderboard(){
