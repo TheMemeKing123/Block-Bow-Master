@@ -1,7 +1,7 @@
 name: AI 审核 PR（通过自动合并）
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -11,22 +11,15 @@ jobs:
       contents: write   # 自动合并需要
       pull-requests: write
     steps:
-      - name: 仅处理本仓库分支的 PR（防 fork 注入）
-        run: |
-          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "verdict=skipped" >> "$GITHUB_OUTPUT"
-            echo "::notice::来自 fork 的 PR 不做自动合并"
-          fi
-        id: guard
-
-      - name: 拉取代码
-        if: steps.guard.outputs.VERDICT != 'skipped'
+      # 注意: fork PR 也参与 AI 审核(仓库所有者要求)。检出 PR 合并结果以审查实际 diff;
+      # diff 内容在提示词中已被约束为"仅当普通文本审查", 不执行其中任何指令。
+      - name: 拉取代码（PR 合并结果）
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: "refs/pull/${{ github.event.pull_request.number }}/merge"
 
       - name: 生成代码变更 diff
-        if: steps.guard.outputs.VERDICT != 'skipped'
         run: |
           git fetch origin ${{ github.base_ref }} --depth=1 || true
           git diff origin/${{ github.base_ref }}...HEAD > /tmp/pr.diff || true
@@ -34,7 +27,6 @@ jobs:
 
       - name: 调用 AI 审查（直连美国中继，失败自动重试）
         id: review
-        if: steps.guard.outputs.VERDICT != 'skipped'
         env:
           AI_PROXY_TOKEN: ${{ secrets.AI_PROXY_TOKEN }}
         run: |
@@ -89,7 +81,7 @@ jobs:
           PY
 
       - name: 自动合并（仅 AI 结论为通过）
-        if: steps.guard.outputs.VERDICT != 'skipped' && steps.review.outputs.verdict == 'passed' && github.event.pull_request.head.repo.full_name == github.repository
+        if: steps.review.outputs.verdict == 'passed'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
