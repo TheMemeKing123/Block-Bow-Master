@@ -65,7 +65,8 @@ async function listAllUsers(env) {
 /* ---------------- API ---------------- */
 const NAME_RE = /[<>"'\/\\]/;
 const ADMIN_API = ['/api/admin/'];
-const AUTH_API = ['/api/me', '/api/logout', '/api/online', '/api/users/public', '/api/score', '/api/settings/title'];
+const AUTH_API = ['/api/me', '/api/logout', '/api/online', '/api/users/public', '/api/score', '/api/settings/title', '/api/leaderboard'];
+let LB_CACHE = null, LB_CACHE_T = 0;
 const SP_TYPES = { track: 8, split: 5, ice: 3, boom: 8, shadow: 10 };
 /* ===== 赛季系统: 每7天自动换赛季; 切换时积分/箭矢/特殊箭清零(🛡️防丢卡可保护) ===== */
 const SEASON_EPOCH = Date.UTC(2026, 8, 21, 0, 0, 0);   // 2026-09-21 00:00 UTC 第1赛季开启
@@ -218,7 +219,8 @@ async function apiBody(request, env, url) {
       let d2 = null;
       try { const r2 = await dsFetch(env, '/score/' + encodeURIComponent('u:' + me.name), 'POST', body); d2 = await r2.json(); } catch (e) { d2 = null; }   // 非JSON响应兜底(AI评审)
       if (d2 && d2.ok) return json({ score: d2.score|0 });
-      return json({ error: (d2 && d2.error) || '服务暂时不可用，请稍后再试', score: (d2 && d2.score|0) || 0 }, d2 ? 403 : 502);
+      const isAntiCheat = d2 && (d2.error || '').indexOf('贴脸') >= 0;
+      return json({ error: (d2 && d2.error) || '服务暂时不可用，请稍后再试', score: (d2 && d2.score|0) || 0 }, d2 ? (isAntiCheat ? 403 : 400) : 502);
     }
     if (path === '/api/arrow/use' && request.method === 'POST') {
       /* 扣箭下沉为数据服务原子操作(AI评审双存储一致性问题): 整条记录回写会互相覆盖分数 */
@@ -243,7 +245,7 @@ async function apiBody(request, env, url) {
       const type = String(body.type || '');
       if (!SP_TYPES[type]) return json({ error: '未知箭种' }, 400);
       /* 特殊箭购买/消耗也下沉为数据服务原子操作(AI评审双存储一致性) */
-      const rB = await dsFetch(env, (path === '/api/sp/buy' ? '/spbuy/' : '/spuse/') + encodeURIComponent('u:' + me.name), 'POST', { type: type, count: (body.count | 0) || 1, price: SP_TYPES[type] });
+      const rB = await dsFetch(env, (path === '/api/sp/buy' ? '/spbuy/' : '/spuse/') + encodeURIComponent('u:' + me.name), 'POST', { type: type, count: (body.count | 0) || 1 });
       const dB = await rB.json();
       if (dB.ok) return json({ ok: true, score: dB.score|0, left: dB.left|0 });
       return json({ error: dB.error || '服务暂时不可用', left: (dB.left|0) || 0 }, 400);
@@ -256,7 +258,9 @@ async function apiBody(request, env, url) {
     }
     if (path === '/api/leaderboard' && request.method === 'GET') {
       const online = await presenceList(env);
-      const all = await listAllUsers(env);
+      let all = null;
+      if (Date.now() - LB_CACHE_T < 60000 && LB_CACHE) { all = LB_CACHE; }
+      else { all = await listAllUsers(env); LB_CACHE = all; LB_CACHE_T = Date.now(); }
       var rows = [];
       for (var nm in all) {
         var ru = all[nm];
