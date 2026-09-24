@@ -1358,6 +1358,7 @@ const ACH_DEFS = [
   { id:'first-hit',   emoji:'🎯', name:'初次命中',   desc:'完成第一次计分命中' },
   { id:'combo-5',     emoji:'🔥', name:'连击高手',   desc:'达成 5 连击' },
   { id:'combo-10',    emoji:'⚡', name:'连击大师',   desc:'完成 10 连击' },
+  { id:'perfect-round', emoji:'💯', name:'百发百中', desc:'单局射箭 10 支全部命中' },
   { id:'round-100',   emoji:'🎇', name:'神射手',     desc:'单局得分达到 100' },
   { id:'round-300',   emoji:'🌟', name:'狙击之王',   desc:'单局得分达到 300' },
   { id:'rush-200',    emoji:'⏱️', name:'狂射高手',   desc:'30秒狂射个人最佳达到 200' },
@@ -1369,25 +1370,42 @@ const ACH_DEFS = [
   { id:'rank-king',   emoji:'👑', name:'登顶王者',   desc:'达到王者段位(累计100000分)' }
 ];
 function achIsUnlocked(id){ const u = AUTH.user; return !!(u && u.ach && u.ach.indexOf(id) >= 0); }
+const ACH_PENDING = {};
 function achUnlock(id){
-  if (achIsUnlocked(id)) return Promise.resolve();
+  if (achIsUnlocked(id) || ACH_PENDING[id]) return;
+  ACH_PENDING[id] = true;
   const def = ACH_DEFS.find(function(d){ return d.id === id; });
-  return api('/api/ach/unlock', { method:'POST', body:{ id: id } }).then(function(d){
+  api('/api/ach/unlock', { method:'POST', body:{ id: id } }).then(function(d){
     if (d && d.ok){
       if (AUTH.user) AUTH.user.ach = d.ach || [];
       if (d.unlocked && def) banner(def.emoji + ' 成就解锁：' + def.name, def.desc);
     }
   }).catch(function(){});
 }
+/* 批量上报(合并单帧内的多个解锁, 减少请求) */
+function achUnlockBatch(ids){
+  const fresh = ids.filter(function(id){ return !achIsUnlocked(id) && !ACH_PENDING[id]; });
+  if (!fresh.length) return;
+  fresh.forEach(function(id){ ACH_PENDING[id] = true; });
+  api('/api/ach/unlock-batch', { method:'POST', body:{ ids: fresh } }).then(function(d){
+    if (d && d.ok){
+      if (AUTH.user) AUTH.user.ach = d.ach || [];
+      ACH_DEFS.forEach(function(def){
+        if (fresh.indexOf(def.id) >= 0 && (AUTH.user.ach || []).indexOf(def.id) >= 0){
+          banner(def.emoji + ' 成就解锁：' + def.name, def.desc);
+        }
+      });
+    }
+  }).catch(function(){});
+}
 function checkAchievements(){
   if (!AUTH.user) return;
-  const sc = AUTH.user.score|0;
   const cand = [];
   if ((G.hits|0) >= 1) cand.push('first-hit');
   if ((G.combo|0) >= 5) cand.push('combo-5');
   if ((G.combo|0) >= 10) cand.push('combo-10');
   if ((G.shots|0) >= 10 && (G.hits|0) === (G.shots|0)) cand.push('perfect-round');
-  if ((G.roundScore|0) >= 100 && G.mode === 'solo') cand.push('round-100');
+  if ((G.roundScore|0) >= 100) cand.push('round-100');
   if ((G.roundScore|0) >= 300) cand.push('round-300');
   if ((G.best||{}).rush30 >= 200) cand.push('rush-200');
   if ((G.best||{}).endless >= 300) cand.push('endless-300');
@@ -1398,7 +1416,7 @@ function checkAchievements(){
   let spTotal = 0; const sp = AUTH.user.sp || {};
   Object.keys(sp).forEach(function(k){ spTotal += sp[k]|0; });
   if (spTotal >= 1) cand.push('billion-1');
-  cand.forEach(function(id){ if (!achIsUnlocked(id)) achUnlock(id); });
+  achUnlockBatch(cand);
 }
 let SEASON_SYNC = { epoch: 1789948800000, ms: 7*24*3600*1000 };   // 优先从 /api/season 同步, 本地常量兜底
 let SEASON_SYNCED = false;
@@ -1544,7 +1562,7 @@ function startGame(mode, variant){
   G = {
     active:true, mode, mySlot, M,
     arrowType:'normal', hiddenUntil:0, sp:((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.sp) || {}),
-    variant: (['normal','endless','precision','rush30'].indexOf(variant) >= 0 ? variant : 'normal'), deadline: 0, mvSpeed: 1.4, best: ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}),
+    variant: (['normal','endless','precision','rush30'].indexOf(variant) >= 0 ? variant : 'normal'), deadline: 0, mvSpeed: 1.4, get best(){ return ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.best) || {}); },
     yaw:0, pitch:0, draw:0, drawing:false, aiming:false, scoping:false,
     rightBtn:false, everLocked:false,
     recoil:0, myName: displayName(session), myScore: getScore(session), roundScore:0, combo:0, lastHitT:0, missCombo:0, shots:0, hits:0, misses:0, bestCombo:0,
@@ -1961,6 +1979,7 @@ function exitGame(){
   show('screen-lobby');
   if (AUTH.user) { $('lob-score').textContent = (AUTH.user.score|0); refreshRankBadge(); }
   updateArrowUI();
+  if (AUTH.user) checkAchievements();   // 登录/退出大厅路径的积分变动补解锁
   G = null;
 }
 

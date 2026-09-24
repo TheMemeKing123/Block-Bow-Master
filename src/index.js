@@ -257,10 +257,28 @@ async function apiBody(request, env, url) {
       return json({ error: (d3 && d3.error) || '购买服务暂时不可用，请稍后再试', score: d3 ? (d3.score|0) : 0 }, 400);
     }
     if (path === '/api/ach/unlock' && request.method === 'POST') {
-      const r5 = await dsFetch(env, '/ach/' + encodeURIComponent('u:' + me.name), 'POST', { id: String(body.id || '') });
-      const d5 = await r5.json();
-      if (d5.ok) { if (d5.ach) me.ach = d5.ach; return json({ ok: true, unlocked: !!d5.unlocked, ach: d5.ach || [] }); }
+      /* 上游也做长度/字符校验(AI评审), 与数据层正则清洗双保险 */
+      const achId = String(body.id || '').slice(0, 24).replace(/[^a-zA-Z0-9_-]/g, '');
+      if (!achId) return json({ error: '参数错误' }, 400);
+      const r5 = await dsFetch(env, '/ach/' + encodeURIComponent('u:' + me.name), 'POST', { id: achId });
+      let d5 = null;
+      try { d5 = await r5.json(); } catch (e) { d5 = null; }
+      if (d5 && d5.ok) { if (d5.ach) me.ach = d5.ach; return json({ ok: true, unlocked: !!d5.unlocked, ach: d5.ach || [] }); }
       return json({ error: '服务暂时不可用' }, 502);
+    }
+    if (path === '/api/ach/unlock-batch' && request.method === 'POST') {
+      const ids = Array.isArray(body.ids) ? body.ids.slice(0, 20).map(function(x){ return String(x || '').slice(0, 24).replace(/[^a-zA-Z0-9_-]/g, ''); }).filter(Boolean) : [];
+      if (!ids.length) return json({ ok: true, unlockedAny: false, ach: (me.ach || []) });
+      let cur = (me.ach || []);
+      let anyNew = false;
+      for (var i6 = 0; i6 < ids.length; i6++) {
+        if (cur.indexOf(ids[i6]) < 0) { cur.push(ids[i6]); anyNew = true; }
+      }
+      const r6 = anyNew ? await dsFetch(env, '/ach/' + encodeURIComponent('u:' + me.name), 'POST', { id: ids[0], extra: ids.slice(1) }) : null;
+      let d6 = r6 ? await r6.json() : null;
+      if (anyNew && !(d6 && d6.ok)) return json({ error: '服务暂时不可用' }, 502);
+      if (d6 && d6.ach) me.ach = d6.ach; else if (anyNew) me.ach = cur;
+      return json({ ok: true, unlockedAny: anyNew, ach: me.ach || [] });
     }
     if (path === '/api/leaderboard' && request.method === 'GET') {
       const online = await presenceList(env);
