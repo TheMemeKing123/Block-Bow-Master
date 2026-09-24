@@ -45,6 +45,7 @@ const server = http.createServer((req, res) => {
   }
   /* 赛季结算(原子): 同步读改写, 单线程事件循环内无并发交错 */
   if (req.method === 'POST' && rawKey.startsWith('settle/')) {
+    if (!TOKEN || req.headers['x-data-token'] !== TOKEN) { res.writeHead(403); res.end('forbidden'); return; }
     const name = safeKey(rawKey.slice(7));   // 防路径穿越(AI评审: 必须过滤)
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
@@ -65,7 +66,7 @@ const server = http.createServer((req, res) => {
           rec.score = 0; rec.arrows = grant; rec.sp = {};   // 无卡: 积分/特殊箭清零, 箭矢补给
         }
         rec.seasonIdx = idx;
-        try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) {}
+        try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) { res.writeHead(500); res.end('write failed'); return; }
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: 1, settled: (rec.seasonIdx|0) === idx, rec: rec }));
@@ -74,6 +75,7 @@ const server = http.createServer((req, res) => {
   }
   /* 记分(原子): 服务端校验反作弊(12m/单次上限)并同步读改写 */
   if (req.method === 'POST' && rawKey.startsWith('score/')) {
+    if (!TOKEN || req.headers['x-data-token'] !== TOKEN) { res.writeHead(403); res.end('forbidden'); return; }
     const name = safeKey(rawKey.slice(6));   // 防路径穿越(AI评审: 必须过滤)
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
@@ -93,7 +95,7 @@ const server = http.createServer((req, res) => {
         if (Math.min(d1, d2) < 12) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '贴脸得分已被拒绝', score: rec.score|0 })); return; }
       }
       rec.score = (rec.score|0) + d;
-      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) {}
+      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) { res.writeHead(500); res.end('write failed'); return; }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: 1, score: rec.score|0 }));
     });
@@ -101,6 +103,7 @@ const server = http.createServer((req, res) => {
   }
   /* 购特殊箭(原子): 扣积分加库存 */
   if (req.method === 'POST' && rawKey.startsWith('spbuy/')) {
+    if (!TOKEN || req.headers['x-data-token'] !== TOKEN) { res.writeHead(403); res.end('forbidden'); return; }
     const name = safeKey(rawKey.slice(6));
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
@@ -119,7 +122,7 @@ const server = http.createServer((req, res) => {
       if ((rec.score|0) < cost) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '积分不足，还差 ' + (cost - (rec.score|0)) + ' 分', score: rec.score|0 })); return; }
       rec.score = (rec.score|0) - cost;
       rec.sp[type] = (rec.sp[type]|0) + count;
-      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) {}
+      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) { res.writeHead(500); res.end('write failed'); return; }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: 1, score: rec.score|0, left: rec.sp[type]|0 }));
     });
@@ -127,6 +130,7 @@ const server = http.createServer((req, res) => {
   }
   /* 扣箭(原子): 支持批量(脱靶连扣) */
   if (req.method === 'POST' && rawKey.startsWith('arrowuse/')) {
+    if (!TOKEN || req.headers['x-data-token'] !== TOKEN) { res.writeHead(403); res.end('forbidden'); return; }
     const name = safeKey(rawKey.slice(9));
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
@@ -139,7 +143,7 @@ const server = http.createServer((req, res) => {
       let rec = {};
       try { rec = JSON.parse(fs.readFileSync(f, 'utf8') || '{}'); } catch (e) {}
       rec.arrows = Math.max(0, (rec.arrows|0) - n);
-      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) {}
+      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) { res.writeHead(500); res.end('write failed'); return; }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: 1, arrows: rec.arrows|0 }));
     });
@@ -147,6 +151,7 @@ const server = http.createServer((req, res) => {
   }
   /* 特殊箭消耗(原子) */
   if (req.method === 'POST' && rawKey.startsWith('spuse/')) {
+    if (!TOKEN || req.headers['x-data-token'] !== TOKEN) { res.writeHead(403); res.end('forbidden'); return; }
     const name = safeKey(rawKey.slice(6));
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
@@ -162,7 +167,7 @@ const server = http.createServer((req, res) => {
       if (!rec.sp) rec.sp = {};
       if ((rec.sp[type]|0) < 1) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '该箭已用完', left: 0 })); return; }
       rec.sp[type] = (rec.sp[type]|0) - 1;
-      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) {}
+      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) { res.writeHead(500); res.end('write failed'); return; }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: 1, left: rec.sp[type]|0 }));
     });
@@ -170,6 +175,7 @@ const server = http.createServer((req, res) => {
   }
   /* 购防丢卡(原子): 校验积分并同步扣分+发卡 */
   if (req.method === 'POST' && rawKey.startsWith('cardbuy/')) {
+    if (!TOKEN || req.headers['x-data-token'] !== TOKEN) { res.writeHead(403); res.end('forbidden'); return; }
     const name = safeKey(rawKey.slice(8));   // 防路径穿越(AI评审: 必须过滤)
     if (!name) { res.writeHead(400); res.end('no name'); return; }
     let body = '';
@@ -184,7 +190,7 @@ const server = http.createServer((req, res) => {
       if ((rec.score|0) < cost) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: 0, error: '积分不足，还差 ' + (cost - (rec.score|0)) + ' 分', score: rec.score|0 })); return; }
       rec.score = (rec.score|0) - cost;
       rec.anticard = (rec.anticard|0) + 1;
-      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) {}
+      try { fs.writeFileSync(f, JSON.stringify(rec)); } catch (e) { res.writeHead(500); res.end('write failed'); return; }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: 1, score: rec.score|0, anticard: rec.anticard|0 }));
     });
