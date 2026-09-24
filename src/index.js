@@ -274,7 +274,7 @@ async function apiBody(request, env, url) {
       for (var i6 = 0; i6 < ids.length; i6++) {
         if (cur.indexOf(ids[i6]) < 0) { cur.push(ids[i6]); anyNew = true; }
       }
-      const r6 = anyNew ? await dsFetch(env, '/ach/' + encodeURIComponent('u:' + me.name), 'POST', { id: ids[0], extra: ids.slice(1) }) : null;
+      const r6 = anyNew ? await dsFetch(env, '/ach/' + encodeURIComponent('u:' + me.name), 'POST', { id: ids[0], ids: ids }) : null;   // ids字段与数据层协议对齐(AI评审)
       let d6 = r6 ? await r6.json() : null;
       if (anyNew && !(d6 && d6.ok)) return json({ error: '服务暂时不可用' }, 502);
       if (d6 && d6.ach) me.ach = d6.ach; else if (anyNew) me.ach = cur;

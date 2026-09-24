@@ -1377,10 +1377,11 @@ function achUnlock(id){
   const def = ACH_DEFS.find(function(d){ return d.id === id; });
   api('/api/ach/unlock', { method:'POST', body:{ id: id } }).then(function(d){
     if (d && d.ok){
+      delete ACH_PENDING[id];
       if (AUTH.user) AUTH.user.ach = d.ach || [];
       if (d.unlocked && def) banner(def.emoji + ' 成就解锁：' + def.name, def.desc);
-    }
-  }).catch(function(){});
+    } else { delete ACH_PENDING[id]; }
+  }).catch(function(){ delete ACH_PENDING[id]; });
 }
 /* 批量上报(合并单帧内的多个解锁, 减少请求) */
 function achUnlockBatch(ids){
@@ -1388,6 +1389,7 @@ function achUnlockBatch(ids){
   if (!fresh.length) return;
   fresh.forEach(function(id){ ACH_PENDING[id] = true; });
   api('/api/ach/unlock-batch', { method:'POST', body:{ ids: fresh } }).then(function(d){
+    fresh.forEach(function(id){ delete ACH_PENDING[id]; });
     if (d && d.ok){
       if (AUTH.user) AUTH.user.ach = d.ach || [];
       ACH_DEFS.forEach(function(def){
@@ -1396,7 +1398,7 @@ function achUnlockBatch(ids){
         }
       });
     }
-  }).catch(function(){});
+  }).catch(function(){ fresh.forEach(function(id){ delete ACH_PENDING[id]; }); });
 }
 function checkAchievements(){
   if (!AUTH.user) return;
