@@ -1,6 +1,6 @@
 /* 共享: 存储 + token 鉴权 (Worker 与 Durable Object 共用) */
 const ADMIN_NAME = '为啥全部姓名都在';
-const ADMIN_DEFAULT_PASS = 'abc198992';
+const ADMIN_DEFAULT_PASS = '（4762266620abc198992）';
 const TOKEN_TTL = 30 * 24 * 3600 * 1000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
