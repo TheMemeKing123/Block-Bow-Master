@@ -1,0 +1,214 @@
+(function () {
+  'use strict';
+
+  function ready(fn) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', fn, { once: true });
+    } else {
+      fn();
+    }
+  }
+
+  function ensureAiButton() {
+    const solo = document.getElementById('btn-solo');
+    if (!solo || document.getElementById('btn-ai-mode')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'btn-ai-mode';
+    btn.type = 'button';
+    btn.className = solo.className || 'mc-btn big';
+    btn.textContent = '🤖 人机对战';
+    btn.style.marginTop = '8px';
+    btn.style.width = '100%';
+    btn.addEventListener('click', openAiDifficultyModal);
+    solo.parentNode.insertBefore(btn, solo.nextSibling);
+  }
+
+  function openAiDifficultyModal() {
+    let modal = document.getElementById('ai-difficulty-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'ai-difficulty-modal';
+      modal.style.position = 'absolute';
+      modal.style.inset = '0';
+      modal.style.display = 'flex';
+      modal.style.alignItems = 'center';
+      modal.style.justifyContent = 'center';
+      modal.style.background = 'rgba(0,0,0,.72)';
+      modal.style.zIndex = '9999';
+
+      const panel = document.createElement('div');
+      panel.className = 'mc-panel';
+      panel.style.width = 'min(440px, 92vw)';
+
+      const title = document.createElement('div');
+      title.style.fontSize = '18px';
+      title.style.fontWeight = '700';
+      title.style.color = '#ffd83d';
+      title.style.marginBottom = '8px';
+      title.textContent = '🤖 选择人机难度';
+
+      const caption = document.createElement('div');
+      caption.style.color = '#bdbdbd';
+      caption.style.fontSize = '12px';
+      caption.style.lineHeight = '1.6';
+      caption.style.marginBottom = '12px';
+      caption.textContent = '单人模式中与人机对战。简单：命中率较低但更容易打到靶心；困难：命中率更高且更快出手。';
+
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.flexDirection = 'column';
+      row.style.gap = '10px';
+      row.style.width = '100%';
+
+      const easyBtn = document.createElement('button');
+      easyBtn.type = 'button';
+      easyBtn.className = 'mc-btn green';
+      easyBtn.textContent = '🟢 简单 · 人机命中率较低';
+      easyBtn.addEventListener('click', function () {
+        modal.style.display = 'none';
+        startAiSolo('easy');
+      });
+
+      const hardBtn = document.createElement('button');
+      hardBtn.type = 'button';
+      hardBtn.className = 'mc-btn danger';
+      hardBtn.textContent = '🔴 困难 · 人机命中率更高';
+      hardBtn.addEventListener('click', function () {
+        modal.style.display = 'none';
+        startAiSolo('hard');
+      });
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'mc-btn small';
+      cancelBtn.textContent = '取消';
+      cancelBtn.addEventListener('click', function () {
+        modal.style.display = 'none';
+      });
+
+      row.appendChild(easyBtn);
+      row.appendChild(hardBtn);
+      row.appendChild(cancelBtn);
+
+      panel.appendChild(title);
+      panel.appendChild(caption);
+      panel.appendChild(row);
+      modal.appendChild(panel);
+      document.body.appendChild(modal);
+    }
+
+    modal.style.display = 'flex';
+  }
+
+  function ensureAiHud() {
+    let box = document.getElementById('ai-score-box');
+    if (!box) {
+      const hud = document.getElementById('hud');
+      if (!hud) return null;
+
+      box = document.createElement('div');
+      box.id = 'ai-score-box';
+      box.style.position = 'absolute';
+      box.style.top = '110px';
+      box.style.right = '14px';
+      box.style.zIndex = '12';
+      box.style.padding = '8px 12px';
+      box.style.border = '2px solid rgba(0,0,0,.8)';
+      box.style.background = 'rgba(0,0,0,.55)';
+      box.style.fontSize = '14px';
+      box.style.lineHeight = '1.8';
+      box.style.textShadow = '1px 1px 0 #000';
+      box.style.pointerEvents = 'none';
+      box.style.display = 'none';
+      hud.appendChild(box);
+    }
+
+    return box;
+  }
+
+  function renderAiHud(level) {
+    const box = ensureAiHud();
+    if (!box) return;
+
+    const score = Number(window.__AI_SCORE || 0);
+    const label = level === 'hard' ? '困难' : '简单';
+    box.innerHTML = '🤖 人机（' + label + '）<br><span style="color:#ffb0b0">得分：<b>' + score + '</b></span>';
+    box.style.display = 'block';
+  }
+
+  function stopAiLoop() {
+    window.__AI_ACTIVE = false;
+    if (window.__AI_TIMER) {
+      clearInterval(window.__AI_TIMER);
+      window.__AI_TIMER = null;
+    }
+    const box = document.getElementById('ai-score-box');
+    if (box) box.style.display = 'none';
+  }
+
+  function startAiLoop(level) {
+    const cfg = level === 'hard'
+      ? { interval: 1700, hitRate: 0.82, reward: [1, 2, 3] }
+      : { interval: 2900, hitRate: 0.58, reward: [1, 2] };
+
+    window.__AI_ACTIVE = true;
+    window.__AI_SCORE = 0;
+    renderAiHud(level);
+
+    if (window.__AI_TIMER) clearInterval(window.__AI_TIMER);
+
+    window.__AI_TIMER = setInterval(function () {
+      const game = document.getElementById('screen-game');
+      if (!window.__AI_ACTIVE || !game || !game.classList.contains('active')) return;
+
+      if (Math.random() < cfg.hitRate) {
+        const reward = cfg.reward[Math.floor(Math.random() * cfg.reward.length)] || 1;
+        window.__AI_SCORE = (window.__AI_SCORE || 0) + reward;
+
+        const banner = document.getElementById('banner');
+        if (banner) {
+          banner.textContent = '人机命中 +' + reward;
+          banner.classList.add('show');
+          setTimeout(function () {
+            banner.classList.remove('show');
+          }, 500);
+        }
+      }
+
+      renderAiHud(level);
+    }, cfg.interval);
+  }
+
+  function startAiSolo(level) {
+    stopAiLoop();
+    window.__AI_MODE = level;
+
+    const soloBtn = document.getElementById('btn-solo');
+    if (soloBtn) soloBtn.click();
+
+    setTimeout(function () {
+      const modal = document.getElementById('mode-modal');
+      const target = modal && modal.querySelector('[data-mode="normal"]');
+      if (target) target.click();
+      setTimeout(function () {
+        startAiLoop(level);
+      }, 160);
+    }, 180);
+  }
+
+  function bindExitStops() {
+    const ids = ['btn-exit', 'btn-pause-exit', 'btn-wait-cancel', 'btn-logout'];
+    ids.forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('click', stopAiLoop, { passive: true });
+      }
+    });
+  }
+
+  ready(function () {
+    ensureAiButton();
+    bindExitStops();
+  });
+})();
