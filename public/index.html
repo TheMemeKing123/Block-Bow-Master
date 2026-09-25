@@ -2693,12 +2693,12 @@ function bindSkinModal(){
     rd.onload = () => {
       const img = new Image();
       img.onload = () => {
-        // 支持两种格式: ①标准MC披风模板(2:1, 如512x256/1024x512, 背部区域在右列) ②任意自定义图案
+        // 支持两种格式: ①标准MC披风模板(2:1, 64x32单元布局, 背部区域在(1,1)-(11,17)) ②任意自定义图案
         let sx = 0, sy = 0, sw = img.width, sh = img.height;
         const ratio = img.width / img.height;
         if (Math.abs(ratio - 2) < 0.2 && img.width >= 256){
-          sx = Math.round(img.width * 0.547); sy = Math.round(img.height * 0.0625);
-          sw = Math.round(img.width * 0.18); sh = Math.round(img.height * 0.8125);
+          sx = Math.round(img.width / 64 * 1); sy = Math.round(img.height / 32 * 1);
+          sw = Math.round(img.width / 64 * 10); sh = Math.round(img.height / 32 * 16);
           $('cape-status').textContent = '已识别标准MC披风格式, 提取背部图案';
         }
         const c2 = document.createElement('canvas'); c2.width = 64; c2.height = 96;
