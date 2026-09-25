@@ -1359,15 +1359,15 @@ const ACH_DEFS = [
   { id:'combo-5',     emoji:'🔥', name:'连击高手',   desc:'达成 5 连击' },
   { id:'combo-10',    emoji:'⚡', name:'连击大师',   desc:'完成 10 连击' },
   { id:'perfect-round', emoji:'💯', name:'百发百中', desc:'单局射箭 10 支全部命中' },
-  { id:'round-100',   emoji:'🎇', name:'神射手',     desc:'单局得分达到 100' },
-  { id:'round-300',   emoji:'🌟', name:'狙击之王',   desc:'单局得分达到 300' },
-  { id:'round-500',   emoji:'☄️', name:'传奇射手',   desc:'单局得分达到 500' },
-  { id:'rush-200',    emoji:'⏱️', name:'狂射高手',   desc:'30秒狂射个人最佳达到 200' },
-  { id:'rush-400',    emoji:'⏰', name:'狂射之王',   desc:'30秒狂射个人最佳达到 400' },
-  { id:'endless-300', emoji:'♾️', name:'无限行者',   desc:'无限模式个人最佳达到 300' },
-  { id:'endless-600', emoji:'🌌', name:'无限之王',   desc:'无限模式个人最佳达到 600' },
-  { id:'precision-100', emoji:'🎯', name:'精准大师', desc:'精准挑战单局得分达到 100' },
-  { id:'precision-200', emoji:'🔍', name:'百步穿杨',   desc:'精准挑战单局得分达到 200' },
+  { id:'round-100',   emoji:'🎇', name:'神射手',     desc:'单局得分达到 1000' },
+  { id:'round-300',   emoji:'🌟', name:'狙击之王',   desc:'单局得分达到 3000' },
+  { id:'round-500',   emoji:'☄️', name:'传奇射手',   desc:'单局得分达到 10000' },
+  { id:'rush-200',    emoji:'⏱️', name:'狂射高手',   desc:'30秒狂射个人最佳达到 600' },
+  { id:'rush-400',    emoji:'⏰', name:'狂射之王',   desc:'30秒狂射个人最佳达到 1500' },
+  { id:'endless-300', emoji:'♾️', name:'无限行者',   desc:'无限模式个人最佳达到 1200' },
+  { id:'endless-600', emoji:'🌌', name:'无限之王',   desc:'无限模式个人最佳达到 3000' },
+  { id:'precision-100', emoji:'🎯', name:'精准大师', desc:'精准挑战单局得分达到 300' },
+  { id:'precision-200', emoji:'🔍', name:'百步穿杨',   desc:'精准挑战单局得分达到 800' },
   { id:'billion-1',   emoji:'🛒', name:'军火商',     desc:'在商城购买第一支特殊箭' },
   { id:'anticard-1',  emoji:'🛡️', name:'未雨绸缪',   desc:'购买赛季防丢卡' },
   { id:'rank-diamond', emoji:'💎', name:'璀璨新星',  desc:'达到钻石段位(累计12000分)' },
@@ -1415,15 +1415,15 @@ function checkAchievements(){
   if (combo >= 5) cand.push('combo-5');
   if (combo >= 10) cand.push('combo-10');
   if (shots >= 10 && hits === shots) cand.push('perfect-round');
-  if (roundScore >= 100) cand.push('round-100');
-  if (roundScore >= 300) cand.push('round-300');
-  if (roundScore >= 500) cand.push('round-500');
-  if ((AUTH.user.best||{}).rush30 >= 200) cand.push('rush-200');
-  if ((AUTH.user.best||{}).rush30 >= 400) cand.push('rush-400');
-  if ((AUTH.user.best||{}).endless >= 300) cand.push('endless-300');
-  if ((AUTH.user.best||{}).endless >= 600) cand.push('endless-600');
-  if (variant === 'precision' && roundScore >= 100) cand.push('precision-100');
-  if (variant === 'precision' && roundScore >= 200) cand.push('precision-200');
+  if (roundScore >= 1000) cand.push('round-100');
+  if (roundScore >= 3000) cand.push('round-300');
+  if (roundScore >= 10000) cand.push('round-500');
+  if ((AUTH.user.best||{}).rush30 >= 600) cand.push('rush-200');
+  if ((AUTH.user.best||{}).rush30 >= 1500) cand.push('rush-400');
+  if ((AUTH.user.best||{}).endless >= 1200) cand.push('endless-300');
+  if ((AUTH.user.best||{}).endless >= 3000) cand.push('endless-600');
+  if (variant === 'precision' && roundScore >= 300) cand.push('precision-100');
+  if (variant === 'precision' && roundScore >= 800) cand.push('precision-200');
   if ((AUTH.user.score|0) >= 12000) cand.push('rank-diamond');
   if ((AUTH.user.score|0) >= 100000) cand.push('rank-king');
   if ((AUTH.user.anticard|0) >= 1) cand.push('anticard-1');
@@ -1464,12 +1464,12 @@ function refreshSeason(){
 /* 段位: 按累计积分定段, 大厅与游戏内记分板展示 */
 function rankOf(score){
   const v = score|0;
-  if(v >= 100000) return { emoji:'👑', name:'王者射手', c:'#ffd700' };
-  if(v >= 30000) return { emoji:'🔮', name:'星耀射手', c:'#b57aff' };
-  if(v >= 12000) return { emoji:'💎', name:'钻石射手', c:'#7ae0ff' };
-  if(v >= 5000) return { emoji:'🏆', name:'铂金射手', c:'#7effb0' };
-  if(v >= 2000) return { emoji:'🥇', name:'黄金射手', c:'#ffd54f' };
-  if(v >= 500) return { emoji:'🥈', name:'白银射手', c:'#d9e0e8' };
+  if(v >= 400000) return { emoji:'👑', name:'王者射手', c:'#ffd700' };
+  if(v >= 150000) return { emoji:'🔮', name:'星耀射手', c:'#b57aff' };
+  if(v >= 60000) return { emoji:'💎', name:'钻石射手', c:'#7ae0ff' };
+  if(v >= 25000) return { emoji:'🏆', name:'铂金射手', c:'#7effb0' };
+  if(v >= 10000) return { emoji:'🥇', name:'黄金射手', c:'#ffd54f' };
+  if(v >= 2000) return { emoji:'🥈', name:'白银射手', c:'#d9e0e8' };
   return { emoji:'🥉', name:'青铜射手', c:'#d0a06a' };
 }
 function refreshRankBadge(){
