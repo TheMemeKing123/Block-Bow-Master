@@ -378,6 +378,19 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <button class="mc-btn" id="skin-pick" style="flex:1">选择 PNG 文件</button>
     <button class="mc-btn green" id="skin-save" style="flex:1">保存并使用</button>
   </div>
+  <div style="border-top:1px solid #555;margin-top:12px;padding-top:10px">
+    <b style="font-size:14px">🧣 我的披风</b>
+    <div style="display:flex;gap:14px;align-items:center;margin-top:8px">
+      <canvas id="cape-preview" width="128" height="192" style="width:64px;height:96px;image-rendering:pixelated;border:2px solid #555;background:#222"></canvas>
+      <div style="font-size:12px;color:#aaa;line-height:1.6">上传披风 PNG（建议 64x96）<br>多人对战里所有玩家可见<br><span id="cape-status" style="color:#7ee37e"></span></div>
+    </div>
+    <input type="file" id="cape-file" accept="image/png" style="display:none">
+    <div class="row" style="margin-top:10px">
+      <button class="mc-btn" id="cape-pick" style="flex:1">选择 PNG</button>
+      <button class="mc-btn green" id="cape-save" style="flex:1">保存披风</button>
+      <button class="mc-btn" id="cape-clear" style="min-width:60px">移除</button>
+    </div>
+  </div>
 </div></div>
 <!-- 房间设置弹窗 --><div id="room-setup" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,.65); z-index:60; align-items:center; justify-content:center"><div class="mc-panel" style="max-width:320px;text-align:left">
   <b style="font-size:16px">🎮 多人房间设置</b>
@@ -1205,7 +1218,13 @@ function buildSteve(name){
   bowHold.add(bow);
   armL.add(bowHold);
   const tag = makeNameTag(name); tag.position.y = 2.35; g.add(tag);
-  return { group:g, armL, armR, legL, legR, head, body, tag, bowStr, bowArrow };
+  /* 披风: 挂在背部(body后方), 默认隐藏, 上传披风图后显示 */
+  const capeMat = new THREE.MeshLambertMaterial({color:0x3a6ea5, side:THREE.DoubleSide});
+  const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.85), capeMat);
+  cape.position.set(0, 0.75, -0.16);
+  g.add(cape);
+  cape.visible = false;
+  return { group:g, armL, armR, legL, legR, head, body, tag, bowStr, bowArrow, cape };
 }
 
 /* ---------- 第一人称手臂 + 弓 ---------- */
@@ -2349,6 +2368,11 @@ function loop(){
       if(Math.abs(sp.getX(1) - midX) > 0.002){ sp.setX(1, midX); sp.needsUpdate = true; }
       s.bowArrow.position.x = 0.46 - 0.26 * dcl;
     }
+    /* 披风随移动/时间摆动(有披风的玩家) */
+    if (s.cape && s._hasCape){
+      const swing = Math.sin(t * 6 + (s.group.position.x + s.group.position.z) * 2) * 0.12;
+      s.cape.rotation.x = swing + (moving ? 0.25 : 0.08);
+    }
     s.group.visible = !(latest && latest.hidden);   // 影分: 对方隐身时隐藏其模型
   }
 
@@ -2506,6 +2530,7 @@ function ensureSteve(name){
   scene.add(steve.group);
   G.steves[name] = steve;
   try{ applySkinToSteve(steve, name); }catch(e){}
+  try{ applyCapeToSteve(steve, name); }catch(e){}
   return steve;
 }
 function ensureAllSteves(){
@@ -2535,6 +2560,31 @@ function setBoxUV(geo, faces, W, H){
     uv.setXY(b, u0, vt); uv.setXY(b+1, u1, vt); uv.setXY(b+2, u0, vb); uv.setXY(b+3, u1, vb);
   });
   uv.needsUpdate = true;
+}
+/* 披风贴图: 从服务端读取并贴到指定玩家的披风面 */
+const CAPE_CACHE = {};
+async function applyCapeToSteve(steve, name){
+  try{
+    let data = CAPE_CACHE[name];
+    if (data === undefined){
+      const r = await fetch('/api/cape/get?name=' + encodeURIComponent(name));
+      const d = await r.json();
+      data = d.cape || null;
+      if (data) CAPE_CACHE[name] = data;
+    }
+    if (!data || !steve.cape) return;
+    const img = new Image();
+    img.onload = () => {
+      if (!steve.cape) return;
+      const tex = new THREE.CanvasTexture(img);
+      tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      tex.generateMipmaps = false;
+      steve.cape.material = new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide });
+      steve.cape.visible = true;
+      steve._hasCape = true;
+    };
+    img.src = data;
+  }catch(e){}
 }
 async function applySkinToSteve(steve, name){
   try{
@@ -2615,6 +2665,17 @@ function openSkinModal(){
         img.src = d.skin;
       }
     }).catch(e=>{});
+    fetch('/api/cape/get?name=' + encodeURIComponent(me)).then(r => r.json()).then(d => {
+      const ctx = $('cape-preview').getContext('2d');
+      if (d.cape){
+        const img = new Image();
+        img.onload = () => {
+          ctx.imageSmoothingEnabled = false; ctx.clearRect(0,0,128,192);
+          ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, 128, 192);
+        };
+        img.src = d.cape;
+      } else { ctx.clearRect(0,0,128,192); }
+    }).catch(e=>{});
   }catch(e){}
 }
 function bindSkinModal(){
@@ -2622,6 +2683,45 @@ function bindSkinModal(){
   $('btn-skin').onclick = () => { sfx('ui'); openSkinModal(); };
   $('skin-close').onclick = () => { m.style.display = 'none'; };
   $('skin-pick').onclick = () => $('skin-file').click();
+  /* 披风: 选择/预览/保存/移除 */
+  $('cape-pick').onclick = () => $('cape-file').click();
+  let capeData = null;
+  $('cape-file').onchange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if(!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // 统一缩放到 64x96
+        const c2 = document.createElement('canvas'); c2.width = 64; c2.height = 96;
+        const cx = c2.getContext('2d');
+        cx.imageSmoothingEnabled = false;
+        cx.drawImage(img, 0, 0, 64, 96);
+        capeData = 'data:image/png;base64,' + c2.toDataURL('image/png').split(',')[1];
+        const pv = $('cape-preview').getContext('2d');
+        pv.imageSmoothingEnabled = false; pv.clearRect(0,0,128,192);
+        pv.drawImage(c2, 0, 0, 128, 192);
+        $('cape-status').textContent = '已加载，点保存披风生效';
+      };
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(f);
+  };
+  $('cape-save').onclick = () => {
+    if(!capeData){ $('cape-status').textContent = '请先选择披风 PNG'; return; }
+    fetch('/api/cape/set', { method:'POST', headers:{'Content-Type':'application/json', 'X-User-Token': (AUTH.token||'')}, body: JSON.stringify({ data: capeData }) })
+      .then(r => r.json()).then(d => {
+        if (d.ok){ $('cape-status').textContent = '✅ 披风已保存'; delete CAPE_CACHE[getSession()]; toast('🧣 披风已保存', true); }
+        else $('cape-status').textContent = d.error || '保存失败';
+      }).catch(()=>{ $('cape-status').textContent = '保存失败'; });
+  };
+  $('cape-clear').onclick = () => {
+    fetch('/api/cape/clear', { method:'POST', headers:{'Content-Type':'application/json', 'X-User-Token': (AUTH.token||'')}, body: '{}' })
+      .then(r => r.json()).then(d => {
+        if (d.ok){ capeData = null; const pv = $('cape-preview').getContext('2d'); pv.clearRect(0,0,128,192); $('cape-status').textContent = '已移除'; }
+      }).catch(()=>{});
+  };
   $('skin-file').onchange = (e) => {
     const f = e.target.files && e.target.files[0];
     if(!f) return;

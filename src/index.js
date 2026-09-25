@@ -311,6 +311,27 @@ async function apiBody(request, env, url) {
       if (s > (u.best[v]|0)) { u.best[v] = s; changed = true; await writeUser(env, me.name, u); }
       return json({ ok: true, best: u.best, changed: changed });
     }
+    if (path === '/api/cape/get' && request.method === 'GET') {
+      const nm = String(url.searchParams.get('name') || '').slice(0, 16);
+      const uc = await readUser(env, nm);
+      return json({ cape: (uc && uc.cape) || null });
+    }
+    if (path === '/api/cape/set' && request.method === 'POST') {
+      const data = String(body.data || '');
+      if (!data.startsWith('data:image/png;base64,') || data.length > 43000) return json({ error: '只支持 PNG（小于32KB）' }, 400);
+      const u = await readUser(env, me.name);
+      if (!u) return json({ error: '账号不存在' }, 400);
+      u.cape = data;
+      await writeUser(env, me.name, u);
+      return json({ ok: true });
+    }
+    if (path === '/api/cape/clear' && request.method === 'POST') {
+      const u = await readUser(env, me.name);
+      if (!u) return json({ error: '账号不存在' }, 400);
+      delete u.cape;
+      await writeUser(env, me.name, u);
+      return json({ ok: true });
+    }
     if (path === '/api/skin/set' && request.method === 'POST') {
       const data = String(body.data || '');
       if (!data.startsWith('data:image/png;base64,') || data.length > 40000) return json({ error: '只支持 64x64 PNG（小于30KB）' }, 400);
