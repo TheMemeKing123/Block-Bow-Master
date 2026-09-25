@@ -382,7 +382,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <b style="font-size:14px">🧣 我的披风</b>
     <div style="display:flex;gap:14px;align-items:center;margin-top:8px">
       <canvas id="cape-preview" width="128" height="192" style="width:64px;height:96px;image-rendering:pixelated;border:2px solid #555;background:#222"></canvas>
-      <div style="font-size:12px;color:#aaa;line-height:1.6">上传披风 PNG（建议 64x96）<br>多人对战里所有玩家可见<br><span id="cape-status" style="color:#7ee37e"></span></div>
+      <div style="font-size:12px;color:#aaa;line-height:1.6">支持两种格式：<br>① 标准MC披风PNG（512x256/1024x512，自动提取背部图案）<br>② 任意自定义图案PNG（整图作为披风）<br><span id="cape-status" style="color:#7ee37e"></span></div>
     </div>
     <input type="file" id="cape-file" accept="image/png" style="display:none">
     <div class="row" style="margin-top:10px">
@@ -2693,16 +2693,23 @@ function bindSkinModal(){
     rd.onload = () => {
       const img = new Image();
       img.onload = () => {
-        // 统一缩放到 64x96
+        // 支持两种格式: ①标准MC披风模板(2:1, 如512x256/1024x512, 背部区域在右列) ②任意自定义图案
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+        const ratio = img.width / img.height;
+        if (Math.abs(ratio - 2) < 0.2 && img.width >= 256){
+          sx = Math.round(img.width * 0.547); sy = Math.round(img.height * 0.0625);
+          sw = Math.round(img.width * 0.18); sh = Math.round(img.height * 0.8125);
+          $('cape-status').textContent = '已识别标准MC披风格式, 提取背部图案';
+        }
         const c2 = document.createElement('canvas'); c2.width = 64; c2.height = 96;
         const cx = c2.getContext('2d');
         cx.imageSmoothingEnabled = false;
-        cx.drawImage(img, 0, 0, 64, 96);
+        cx.drawImage(img, sx, sy, sw, sh, 0, 0, 64, 96);
         capeData = 'data:image/png;base64,' + c2.toDataURL('image/png').split(',')[1];
         const pv = $('cape-preview').getContext('2d');
         pv.imageSmoothingEnabled = false; pv.clearRect(0,0,128,192);
         pv.drawImage(c2, 0, 0, 128, 192);
-        $('cape-status').textContent = '已加载，点保存披风生效';
+        if ($('cape-status').textContent.indexOf('标准MC') < 0) $('cape-status').textContent = '已加载，点保存披风生效';
       };
       img.src = rd.result;
     };
