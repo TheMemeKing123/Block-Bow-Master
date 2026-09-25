@@ -382,7 +382,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <b style="font-size:14px">🧣 我的披风</b>
     <div style="display:flex;gap:14px;align-items:center;margin-top:8px">
       <canvas id="cape-preview" width="128" height="192" style="width:64px;height:96px;image-rendering:pixelated;border:2px solid #555;background:#222"></canvas>
-      <div style="font-size:12px;color:#aaa;line-height:1.6">上传披风 PNG（建议 64x96）<br>多人对战里所有玩家可见<br><span id="cape-status" style="color:#7ee37e"></span></div>
+      <div style="font-size:12px;color:#aaa;line-height:1.6">支持两种格式：<br>① 标准MC披风PNG（512x256/1024x512，自动提取背部图案）<br>② 任意自定义图案PNG（整图作为披风）<br><span id="cape-status" style="color:#7ee37e"></span></div>
     </div>
     <input type="file" id="cape-file" accept="image/png" style="display:none">
     <div class="row" style="margin-top:10px">
@@ -2686,6 +2686,26 @@ function bindSkinModal(){
   /* 披风: 选择/预览/保存/移除 */
   $('cape-pick').onclick = () => $('cape-file').click();
   let capeData = null;
+  let capeIsMc = false, capeSrc = null;
+  function renderCapePreview(){
+    if (!capeSrc) return;
+    const c2 = document.createElement('canvas'); c2.width = 64; c2.height = 96;
+    const cx = c2.getContext('2d');
+    cx.imageSmoothingEnabled = false;
+    if (capeIsMc){
+      // 标准MC披风模板(2:1): 背部区域 (1,1)-(11,17) 于 64x32 单元布局
+      const sx = Math.round(capeSrc.width / 64 * 1), sy = Math.round(capeSrc.height / 32 * 1);
+      const sw = Math.round(capeSrc.width / 64 * 10), sh = Math.round(capeSrc.height / 32 * 16);
+      cx.drawImage(capeSrc, sx, sy, sw, sh, 0, 0, 64, 96);
+    } else {
+      cx.drawImage(capeSrc, 0, 0, 64, 96);
+    }
+    capeData = 'data:image/png;base64,' + c2.toDataURL('image/png').split(',')[1];
+    const pv = $('cape-preview').getContext('2d');
+    pv.imageSmoothingEnabled = false; pv.clearRect(0,0,128,192);
+    pv.drawImage(c2, 0, 0, 128, 192);
+  }
+  let capeToggleBtn = null;
   $('cape-file').onchange = (e) => {
     const f = e.target.files && e.target.files[0];
     if(!f) return;
@@ -2693,16 +2713,24 @@ function bindSkinModal(){
     rd.onload = () => {
       const img = new Image();
       img.onload = () => {
-        // 统一缩放到 64x96
-        const c2 = document.createElement('canvas'); c2.width = 64; c2.height = 96;
-        const cx = c2.getContext('2d');
-        cx.imageSmoothingEnabled = false;
-        cx.drawImage(img, 0, 0, 64, 96);
-        capeData = 'data:image/png;base64,' + c2.toDataURL('image/png').split(',')[1];
-        const pv = $('cape-preview').getContext('2d');
-        pv.imageSmoothingEnabled = false; pv.clearRect(0,0,128,192);
-        pv.drawImage(c2, 0, 0, 128, 192);
-        $('cape-status').textContent = '已加载，点保存披风生效';
+        capeSrc = img;
+        capeIsMc = (Math.abs(img.width / img.height - 2) < 0.2 && img.width >= 256);
+        renderCapePreview();
+        $('cape-status').textContent = capeIsMc ? '已识别标准MC披风格式(背部图案) · 可切换整图' : '已加载(整图模式)';
+        if (!capeToggleBtn){
+          capeToggleBtn = document.createElement('button');
+          capeToggleBtn.className = 'mc-btn';
+          capeToggleBtn.style.cssText = 'width:100%;margin-top:6px';
+          capeToggleBtn.onclick = () => {
+            capeIsMc = !capeIsMc;
+            renderCapePreview();
+            capeToggleBtn.textContent = capeIsMc ? '🔄 按整图模式预览' : '🔄 按标准MC格式提取';
+            $('cape-status').textContent = '模式已切换, 预览满意后点保存披风';
+          };
+          $('cape-save').parentNode.appendChild(capeToggleBtn);
+        }
+        capeToggleBtn.textContent = capeIsMc ? '🔄 按整图模式预览' : '🔄 按标准MC格式提取';
+        capeToggleBtn.style.display = 'flex';
       };
       img.src = rd.result;
     };
