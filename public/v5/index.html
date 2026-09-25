@@ -187,6 +187,14 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
 </div>
 
 
+<div class="screen dirt" id="screen-closed" style="z-index:960">
+  <div class="mc-panel">
+    <h1 class="game-title" style="font-size:26px">网站已关闭</h1>
+    <div class="note" style="color:#ffe08a;font-size:16px;padding:8px 0">请过一会儿再来</div>
+    <button class="mc-btn small" id="btn-closed-dev">开发者登录</button>
+  </div>
+</div>
+
 <!--pnid:wBJo02bTNQ9eKd80XSXH9M--><!-- ================= 登录 ================= -->
 <div data-page-node-id="0XFYl7lQcwEktyB0vJu9li" class="screen dirt active" id="screen-login">
   <div data-page-node-id="56yCtK9CeniA4raATJ6h5Z" class="mc-panel">
@@ -262,15 +270,28 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <h1 data-page-node-id="a1t7Kv0BTiARdcQbk399K3" class="game-title" style="font-size:24px"><!--pnid:IInNdA0vJVZFiiRV3UsRCQ-->玩 家 管 理</h1>
     <div data-page-node-id="cYOngCsenWSpLDfv31rD0A" class="note" id="admin-store"><!--pnid:MmtZuC9XO5wu8aySwifixO-->已注册玩家：0 人</div>
     <div data-page-node-id="666SSr1J1b66LhKIQlaH4M" class="note" style="color:#9bc8ff"><!--pnid:Ug3XFAGnRMvBWHG529m8uQ-->实时监控：任何玩家注册 / 登录 / 得分变化，这里都会<b data-page-node-id="a5ihcYpLuiAKYlnJKxhF8I" style="color:#7ee37e"><!--pnid:EUfSStsuI94ZDNQ1v59owb-->自动更新</b><!--pnid:jN501T7qHUH0PsF3RoMIcg-->，不用刷新（需在同一个浏览器里打开本文件）</div>
-    <div data-page-node-id="0fM5yxarmnQoqOMkKG35WN" class="note"><!--pnid:vTxLNoTc6bHPXHlTbizmHa-->管理员：为啥全部姓名都在 ｜ 可加分 / 减分 / 封禁/ 删除 ｜ <b data-page-node-id="YI5icRKjXE01C16Iev8ni8" style="color:#ffd83d"><!--pnid:6mIZKW1oyKwSvjBnjh5j0H-->任命/取消管理员只有超级管理员可用</b></div>
+    <div data-page-node-id="0fM5yxarmnQoqOMkKG35WN" class="note"><!--pnid:vTxLNoTc6bHPXHlTbizmHa-->管理员 / 开发者：全体或指定玩家加减积分与攻击，数额自定义 ｜ 开发者可关闭网站</div>
     <div data-page-node-id="8IH0HbyZrqN4IeV3UxRnEg" class="row" id="appoint-row" style="width:100%; justify-content:flex-start">
       <input data-page-node-id="YdZs4K4JQD50P100h0zGzG" autocomplete="off" class="mc-input" id="appoint-name" maxlength="16" placeholder="输入玩家名称" style="flex:1; min-width:140px">
       <button data-page-node-id="PF83lBrL22sMtILNhMlpJg" class="mc-btn small green" id="btn-appoint" style="min-width:110px"><!--pnid:0Z4thrYZHD2fyvkTk7q1vP-->设为管理员</button>
     </div>
-    <div data-page-node-id="d78sQAmzauNV5lCLKyBLLD" class="row" style="width:100%; justify-content:flex-start">
-      <button data-page-node-id="stV7RniJC4ZgxGHYg136zn" class="mc-btn small" id="btn-all-add" style="min-width:110px"><!--pnid:ViXJbHjBDA3dAJyDWRWIgd-->所有人 +10分</button>
-      <button data-page-node-id="bYe4LCdQaaUGIf9J6qjdzU" class="mc-btn small" id="btn-all-sub" style="min-width:110px"><!--pnid:YIFWkbbDhNvDBpYNnHEfY2-->所有人 -10分</button>
+    <div data-page-node-id="d78sQAmzauNV5lCLKyBLLD" class="row" style="width:100%; justify-content:flex-start; align-items:center">
+      <span class="note" style="color:#ffe08a;min-width:36px">积分</span>
+      <input class="mc-input" id="grant-score" type="number" value="10" style="width:90px;min-width:90px;text-align:center;padding:8px 6px">
+      <button data-page-node-id="stV7RniJC4ZgxGHYg136zn" class="mc-btn small" id="btn-all-add" style="min-width:110px"><!--pnid:ViXJbHjBDA3dAJyDWRWIgd-->全体加积分</button>
+      <button data-page-node-id="bYe4LCdQaaUGIf9J6qjdzU" class="mc-btn small" id="btn-all-sub" style="min-width:110px"><!--pnid:YIFWkbbDhNvDBpYNnHEfY2-->全体减积分</button>
       <button data-page-node-id="ViRLowmQ2NmVBzkKniUvym" class="mc-btn small danger" id="btn-all-clear" style="min-width:130px"><!--pnid:b0ul4eE7HYJbv8KIOjnKbn-->清空所有人积分</button>
+    </div>
+    <div class="row" style="width:100%; justify-content:flex-start; align-items:center">
+      <span class="note" style="color:#9fd4ff;min-width:36px">攻击</span>
+      <input class="mc-input" id="grant-arrows" type="number" value="10" style="width:90px;min-width:90px;text-align:center;padding:8px 6px">
+      <button class="mc-btn small" id="btn-all-add-arrow" style="min-width:110px">全体加攻击</button>
+      <button class="mc-btn small" id="btn-all-sub-arrow" style="min-width:110px">全体减攻击</button>
+    </div>
+    <div class="row" id="site-row" style="width:100%; justify-content:flex-start; display:none; align-items:center">
+      <button class="mc-btn small danger" id="btn-site-close" style="min-width:110px">关闭网站</button>
+      <button class="mc-btn small green" id="btn-site-open" style="min-width:110px">开启网站</button>
+      <span class="note" id="site-state">网站状态：开放</span>
     </div>
     <div data-page-node-id="u2P7LpPPndRqgnY9lkahDe" id="admin-list"></div>
     <button data-page-node-id="7WotTA1zJokJuYrDSXK8g4" class="mc-btn small" id="btn-admin-refresh"><!--pnid:BgzKRA6nnwtvxgqaKacel0-->刷新列表</button>
@@ -540,8 +561,15 @@ async function api(path, opts = {}) {
     clearSession();
     if (curScreen !== 'screen-login' && curScreen !== 'screen-register' && curScreen !== 'screen-game') show('screen-login');
   }
-  if (!res.ok) throw new Error(data.error || ('请求失败 ' + res.status));
+  if (!res.ok) {
+    if (data && data.closed) { showClosed(); throw new Error(data.error || '网站已关闭，请过一会儿再来'); }
+    throw new Error(data.error || ('请求失败 ' + res.status));
+  }
   return data;
+}
+function showClosed(){
+  try{ AUTH.token = null; AUTH.user = null; }catch(e){}
+  show('screen-closed');
 }
 function saveAuth(token, user){
   AUTH.token = token; AUTH.user = user;
@@ -634,6 +662,7 @@ function tryLogin(){
     enterLobby(); sfx('ui');
   }).catch(e=>{
     if(e.message === 'banned') crash('您已被管理员移出这个世界 (player_banned)');
+    else if(String(e.message||'').indexOf('网站已关闭')>=0) showClosed();
     else toast('登录失败：' + e.message, false);
   });
 }
@@ -650,7 +679,10 @@ function tryRegister(){
     toast('注册成功！已自动登录', true); sfx('ui');
     saveAuth(d.token, d.user);
     enterLobby();
-  }).catch(e=>toast('注册失败：' + e.message, false));
+  }).catch(e=>{
+    if(String(e.message||'').indexOf('网站已关闭')>=0) showClosed();
+    else toast('注册失败：' + e.message, false);
+  });
 }
 
 let roomListTimer = null;
@@ -712,8 +744,10 @@ async function refreshUsers(){
   try{
     const d = await api('/api/admin/users');
     USER_CACHE = {};
-    d.users.forEach(u=>{ USER_CACHE[u.username] = { score:u.score||0, banned:!!u.banned, isAdmin:!!u.isAdmin, isDeveloper:!!u.isDeveloper, reg:u.reg||0, lastLogin:u.lastLogin||0 }; });
+    d.users.forEach(u=>{ USER_CACHE[u.username] = { score:u.score||0, arrows:u.arrows, banned:!!u.banned, isAdmin:!!u.isAdmin, isDeveloper:!!u.isDeveloper, reg:u.reg||0, lastLogin:u.lastLogin||0 }; });
     ONLINE_SET = new Set(d.users.filter(u=>u.online).map(u=>u.username));
+    const st = $('site-state');
+    if(st) st.textContent = d.closed ? '网站状态：已关闭' : '网站状态：开放';
     return d.users;
   }catch(e){ return null; }
 }
@@ -761,19 +795,23 @@ async function renderAdmin(){
     const isDevU = !!u.isDeveloper, isAdm = !!u.isAdmin;
     const role = isDevU ? '开发者' : (isAdm ? '管理员' : '玩家');
     const onl = !!u.online;
-    const btns = isDevU ? '' : (
-      `<button data-a="add" data-n="${n}">+10分</button>` +
-      `<button data-a="sub" data-n="${n}">-10分</button>` +
-      (u.banned ? `<button class="unban" data-a="unban" data-n="${n}">解封</button>`
-                : `<button class="ban" data-a="ban" data-n="${n}">封禁</button>`) +
-      `<button class="del" data-a="del" data-n="${n}">删除</button>` +
-      ((isSuper() && isAdm) ? `<button class="ban" data-a="unadmin" data-n="${n}">取消管理员</button>` : '')
-    );
+    const btns =
+      `<button data-a="add" data-n="${n}">加积分</button>` +
+      `<button data-a="sub" data-n="${n}">减积分</button>` +
+      `<button data-a="addar" data-n="${n}">加攻击</button>` +
+      `<button data-a="subar" data-n="${n}">减攻击</button>` +
+      (isDevU ? '' : (
+        (u.banned ? `<button class="unban" data-a="unban" data-n="${n}">解封</button>`
+                  : `<button class="ban" data-a="ban" data-n="${n}">封禁</button>`) +
+        `<button class="del" data-a="del" data-n="${n}">删除</button>` +
+        ((isSuper() && isAdm) ? `<button class="ban" data-a="unadmin" data-n="${n}">取消管理员</button>` : '')
+      ));
     html += `<div class="adm-row">
       <div class="adm-l1">
         <span class="nm" title="${n}">${n}</span>
         <span class="typ ${isAdm||isDevU?'adm':''}">${role}</span>
         <span class="sc">${u.score||0}分</span>
+        <span class="sc" style="color:#9fd4ff">${u.arrows===undefined?100:(u.arrows|0)}攻</span>
         <span class="st ${u.banned?'tag-banned':'tag-ok'}">${u.banned?'【已封禁】':'正常'}</span>
         <span class="st" style="color:${onl?'#7ee37e':'#888'}">${onl?'●在线':'○离线'}</span>
       </div>
@@ -787,6 +825,7 @@ async function openAdmin(){
   clearInterval(adminTimer);
   if(!canManage()){ show('screen-lobby'); return; }
   $('appoint-row').style.display = isSuper() ? 'flex' : 'none';
+  const sr = $('site-row'); if(sr) sr.style.display = isSuper() ? 'flex' : 'none';
   renderAdmin();
   show('screen-admin');
   adminTimer = setInterval(()=>{
@@ -807,8 +846,10 @@ $('admin-list').addEventListener('click', e=>{
     askConfirm(`确定把玩家「${n}」从世界删除？\n账号没了！`, ()=>adminOp('/api/admin/delete', {username:n}, `玩家 ${n} 已从世界删除`));
     return;
   }
-  if(a==='add')   return adminOp('/api/admin/score', {username:n, delta:10},  `已给 ${n} 加 10 分`);
-  if(a==='sub')   return adminOp('/api/admin/score', {username:n, delta:-10}, `已给 ${n} 减 10 分`);
+  if(a==='add')   { const d = grantAmt('grant-score'); return adminOp('/api/admin/score', {username:n, delta:d},  `已给 ${n} 加 ${d} 分`); }
+  if(a==='sub')   { const d = grantAmt('grant-score'); return adminOp('/api/admin/score', {username:n, delta:-d}, `已给 ${n} 减 ${d} 分`); }
+  if(a==='addar') { const d = grantAmt('grant-arrows'); return adminOp('/api/admin/arrows', {username:n, delta:d},  `已给 ${n} 加 ${d} 攻击`); }
+  if(a==='subar') { const d = grantAmt('grant-arrows'); return adminOp('/api/admin/arrows', {username:n, delta:-d}, `已给 ${n} 减 ${d} 攻击`); }
   if(a==='ban')   return adminOp('/api/admin/ban',   {username:n}, `${n} 已被封禁`);
   if(a==='unban') return adminOp('/api/admin/ban',   {username:n, banned:false}, `${n} 已解封`);
   if(a==='unadmin') return adminOp('/api/admin/demote', {username:n}, `${n} 的管理员身份已取消`);
@@ -827,13 +868,33 @@ $('btn-appoint').onclick = ()=>{
   sfx('ui');
 };
 $('appoint-name').addEventListener('keydown', e=>{ if(e.key==='Enter') $('btn-appoint').click(); });
-$('btn-all-add').onclick = ()=>{ sfx('ui'); adminOp('/api/admin/score', {all:true, delta:10}, '已给全部玩家各加 10 分'); };
-$('btn-all-sub').onclick = ()=>{ sfx('ui'); adminOp('/api/admin/score', {all:true, delta:-10}, '已给全部玩家各减 10 分'); };
+function grantAmt(id){
+  const el = $(id);
+  const n = Math.floor(Number(el && el.value));
+  if(!Number.isFinite(n) || n === 0) return 10;
+  return Math.max(1, Math.min(999999, Math.abs(n)));
+}
+$('btn-all-add').onclick = ()=>{ sfx('ui'); const d = grantAmt('grant-score'); adminOp('/api/admin/score', {all:true, delta:d}, '已给全部玩家各加 '+d+' 分'); };
+$('btn-all-sub').onclick = ()=>{ sfx('ui'); const d = grantAmt('grant-score'); adminOp('/api/admin/score', {all:true, delta:-d}, '已给全部玩家各减 '+d+' 分'); };
 $('btn-all-clear').onclick = ()=>{
   askConfirm('确定清空全部玩家的积分？\n所有人的分数都会变成 0！', ()=>{
     adminOp('/api/admin/score', {zero:true}, '所有人的积分已清空'); sfx('ui');
   });
 };
+$('btn-all-add-arrow').onclick = ()=>{ sfx('ui'); const d = grantAmt('grant-arrows'); adminOp('/api/admin/arrows', {all:true, delta:d}, '已给全部玩家各加 '+d+' 攻击'); };
+$('btn-all-sub-arrow').onclick = ()=>{ sfx('ui'); const d = grantAmt('grant-arrows'); adminOp('/api/admin/arrows', {all:true, delta:-d}, '已给全部玩家各减 '+d+' 攻击'); };
+$('btn-site-close').onclick = ()=>{
+  askConfirm('关闭网站后，只有开发者能进入。其他人会看到「网站已关闭，请过一会儿再来」。确定关闭？', ()=>{
+    adminOp('/api/admin/site', {closed:true}, '网站已关闭'); sfx('ui');
+    const st = $('site-state'); if(st) st.textContent = '网站状态：已关闭';
+  });
+};
+$('btn-site-open').onclick = ()=>{
+  adminOp('/api/admin/site', {closed:false}, '网站已开启'); sfx('ui');
+  const st = $('site-state'); if(st) st.textContent = '网站状态：开放';
+};
+const bcd = $('btn-closed-dev');
+if(bcd) bcd.onclick = ()=>{ sfx('ui'); show('screen-login'); };
 bindShop();
   const bpt = $('btn-pause-touch');
   if(bpt) bpt.onclick = () => { sfx('ui'); $('pause-overlay').classList.toggle('show'); };
@@ -1777,6 +1838,7 @@ function hostRoom(setup, isRetry){
   ws.onmessage = (ev)=>{
     const d = netParse(ev);
     if(!d) return;
+    if(d.t === 'site-closed'){ showClosed(); return; }
     if(d.t === 'created'){                    // 房间建好，显示房码
       clearTimeout(failTimer);                // 房间已建好, 不再提示"创建超时"
       NET.roomCode = d.code;
@@ -2123,6 +2185,7 @@ function joinRoom(code, pass, isRetry){
   ws.onmessage = (ev)=>{
     const d = netParse(ev);
     if(!d) return;
+    if(d.t === 'site-closed'){ showClosed(); return; }
     if(d.t === 'no-room'){ toast('房间不存在或房主不在线', false); clearTimeout(failTimer); exitGame(); return; }
     if(d.t === 'need-pass'){                 // 需要密码
       clearTimeout(failTimer);
@@ -2256,14 +2319,40 @@ function handleGameData(d){
    ============================================================ */
 (function boot(){
   loadVoices();
-  if(AUTH.token){
-    api('/api/me', { skipAuth:true }).then(d=>{
-      AUTH.user = d.user;
-      setSession(d.user.username);
-      USER_CACHE[d.user.username] = { score:d.user.score||0, banned:false, isAdmin:!!d.user.isAdmin, isDeveloper:!!d.user.isDeveloper, reg:d.user.reg||0, lastLogin:d.user.lastLogin||0 };
-      enterLobby();
-    }).catch(()=>{ show('screen-login'); });
-  } else show('screen-login');
+  fetch('/api/config').then(r=>r.json()).then(d=>{
+    if(d && d.config && d.config.closed){
+      if(AUTH.token){
+        api('/api/me', { skipAuth:true }).then(m=>{
+          AUTH.user = m.user;
+          setSession(m.user.username);
+          USER_CACHE[m.user.username] = { score:m.user.score||0, arrows:m.user.arrows, banned:false, isAdmin:!!m.user.isAdmin, isDeveloper:!!m.user.isDeveloper, reg:m.user.reg||0, lastLogin:m.user.lastLogin||0 };
+          if(m.user && m.user.isDeveloper) enterLobby();
+          else showClosed();
+        }).catch(()=>showClosed());
+      } else showClosed();
+      return;
+    }
+    if(AUTH.token){
+      api('/api/me', { skipAuth:true }).then(m=>{
+        AUTH.user = m.user;
+        setSession(m.user.username);
+        USER_CACHE[m.user.username] = { score:m.user.score||0, arrows:m.user.arrows, banned:false, isAdmin:!!m.user.isAdmin, isDeveloper:!!m.user.isDeveloper, reg:m.user.reg||0, lastLogin:m.user.lastLogin||0 };
+        enterLobby();
+      }).catch((e)=>{
+        if(e && String(e.message||'').indexOf('网站已关闭')>=0) showClosed();
+        else show('screen-login');
+      });
+    } else show('screen-login');
+  }).catch(()=>{
+    if(AUTH.token){
+      api('/api/me', { skipAuth:true }).then(m=>{
+        AUTH.user = m.user;
+        setSession(m.user.username);
+        USER_CACHE[m.user.username] = { score:m.user.score||0, arrows:m.user.arrows, banned:false, isAdmin:!!m.user.isAdmin, isDeveloper:!!m.user.isDeveloper, reg:m.user.reg||0, lastLogin:m.user.lastLogin||0 };
+        enterLobby();
+      }).catch(()=>show('screen-login'));
+    } else show('screen-login');
+  });
 
 /* ================= 好友系统 v2（申请制：发送申请 → 对方同意 → 成为好友） ================= */
 const MAX_FRIENDS = 200;
@@ -2414,6 +2503,7 @@ function friendWsConnect(){
   ws.onopen = ()=>{ try{ ws.send(JSON.stringify({t:'dm-pull'})); }catch(e){} };
   ws.onmessage = (ev)=>{
     let d=null; try{ d=JSON.parse(ev.data); }catch(e){ return; }
+    if(d.t==='site-closed'){ showClosed(); return; }
     if(d.t==='gift'){
       if(AUTH.user){ AUTH.user.arrows = (AUTH.user.arrows|0) + (d.count|0); updateArrowUI(); }
       toast('🎁 好友 ' + displayName(d.from||'') + ' 送了你 ' + (d.count|0) + ' 支箭！', true); sfx('ui');

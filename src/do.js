@@ -14,6 +14,7 @@ export class RoomDO {
     this.secret = null;       // token签名密钥
     this.offlineMsgs = new Map();
     this.audit = {};          // 反作弊审计 (含 tens 十环计数) // 离线私信: name -> [{from,text,ts}]
+    this.siteClosed = false;
   }
   async ensure() {
     if (this.db && this.secret) return;
@@ -34,6 +35,13 @@ export class RoomDO {
     }
     if (!this.secret) this.secret = b64u(crypto.getRandomValues(new Uint8Array(32)).buffer);
     try { await this.env.BOW_KV.put('db', JSON.stringify(this.db)); } catch (e) {}
+    try {
+      const sc = await this.state.storage.get('site_closed');
+      if (sc === '1' || sc === true) this.siteClosed = true;
+    } catch (e) {}
+    if (!this.siteClosed) {
+      try { this.siteClosed = (await this.env.BOW_KV.get('site_closed')) === '1'; } catch (e) {}
+    }
     await this.persistDb();
   }
 
@@ -285,6 +293,35 @@ export class RoomDO {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    if (url.pathname === '/site-closed' && request.method === 'POST') {
+      await this.ensure();
+      const b = await request.json().catch(() => ({}));
+      this.siteClosed = !!b.closed;
+      try { await this.state.storage.put('site_closed', this.siteClosed ? '1' : '0'); } catch (e) {}
+      if (this.siteClosed) this.kickNonDevelopers();
+      return new Response(JSON.stringify({ ok: true, closed: this.siteClosed }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.pathname === '/admin-grant' && request.method === 'POST') {
+      await this.ensure();
+      const b = await request.json().catch(() => ({}));
+      const scoreDelta = Number.isFinite(b.scoreDelta) ? (b.scoreDelta | 0) : 0;
+      const arrowsDelta = Number.isFinite(b.arrowsDelta) ? (b.arrowsDelta | 0) : 0;
+      const applyOne = (u) => {
+        if (!u) return;
+        if (b.zero) u.score = 0;
+        else if (scoreDelta) u.score = Math.max(0, (u.score || 0) + scoreDelta);
+        if (b.zeroArrows) u.arrows = 0;
+        else if (arrowsDelta) u.arrows = Math.max(0, (u.arrows === undefined ? 100 : (u.arrows | 0)) + arrowsDelta);
+      };
+      if (b.all) {
+        for (const k of Object.keys(this.db || {})) applyOne(this.db[k]);
+      } else {
+        const n = String(b.name || '').slice(0, 16);
+        if (n && this.db[n]) applyOne(this.db[n]);
+      }
+      await this.persistDb();
+      return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
+    }
     if (url.pathname === '/kick') {
       const { username, deleted } = await request.json();
       const ws = this.online.get(username);
@@ -298,6 +335,8 @@ export class RoomDO {
       const u = new URL(request.url);
       const user = await userFromToken(this.env, u.searchParams.get('token'));
       if (!user) return new Response('unauthorized', { status: 401 });
+      await this.ensure();
+      if (this.siteClosed && !user.isDeveloper) return new Response('网站已关闭，请过一会儿再来', { status: 403 });
       const name = user.name;
       const pair = new WebSocketPair();
       this.online.set(name, pair[1]);
@@ -414,6 +453,15 @@ export class RoomDO {
     }
   }
 
+  kickNonDevelopers() {
+    const msg = JSON.stringify({ t: 'site-closed', reason: '网站已关闭，请过一会儿再来' });
+    for (const [name, ws] of [...this.online.entries()]) {
+      const u = this.db && this.db[name];
+      if (u && u.isDeveloper) continue;
+      try { ws.send(msg); } catch (e) {}
+      try { ws.close(4003, 'site-closed'); } catch (e) {}
+    }
+  }
   onClose(ws) {
     this.leaveAll(ws);
     try { const att = this.meta.get(ws) || {}; if (att.name) { this.online.delete(att.name); this.meta.delete(ws); } } catch (e) {}

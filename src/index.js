@@ -12,6 +12,27 @@ function json(data, code = 200) {
     headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
   });
 }
+const CLOSED_MSG = '网站已关闭，请过一会儿再来';
+async function isSiteClosed(env) {
+  try { return (await env.BOW_KV.get('site_closed')) === '1'; } catch (e) { return false; }
+}
+async function setSiteClosed(env, on) {
+  try { await env.BOW_KV.put('site_closed', on ? '1' : '0'); } catch (e) {}
+  try {
+    const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+    await stub.fetch('https://do/site-closed', { method: 'POST', body: JSON.stringify({ closed: !!on }) });
+  } catch (e) {}
+}
+function clampDelta(n) {
+  const d = n | 0;
+  return Math.max(-999999, Math.min(999999, d));
+}
+async function grantToDO(env, payload) {
+  try {
+    const stub = env.ROOM.get(env.ROOM.idFromName('bow-live5'));
+    await stub.fetch('https://do/admin-grant', { method: 'POST', body: JSON.stringify(payload) });
+  } catch (e) {}
+}
 async function readBody(request) {
   try { return await request.json(); } catch (e) { return {}; }
 }
@@ -54,16 +75,19 @@ export default {
     const me = await userFromToken(env, token);
     const path = url.pathname;
 
+    if (path === '/api/config' && request.method === 'GET') {
+      return json({ config: { maxScore: 999999, server: 'bow-v4-cf', closed: await isSiteClosed(env) } });
+    }
+    const siteClosed = await isSiteClosed(env);
     if (path === '/api/skin/get' && request.method === 'GET') {
+      if (siteClosed && !(me && me.isDeveloper)) return json({ error: CLOSED_MSG, closed: true }, 403);
       const nm = String(url.searchParams.get('name') || '').slice(0, 16);
       const db = await getDb(env);
       const u = db[nm];
       return json({ skin: (u && u.skin) || null });
     }
-    if (path === '/api/config' && request.method === 'GET') {
-      return json({ config: { maxScore: 999999, server: 'bow-v4-cf' } });
-    }
     if (path === '/api/register' && request.method === 'POST') {
+      if (siteClosed) return json({ error: CLOSED_MSG, closed: true }, 403);
       const name = String(body.username || '').trim();
       const pass = String(body.password || '');
       if (!name) return json({ error: '请输入姓名（账号）' }, 400);
@@ -116,6 +140,7 @@ export default {
         /* 自动建档账号(无密码)首次登录即认领: 设置密码 */
         if (!u.salt && !u.pass) {
           if (pass.length < 6) return json({ error: '密码至少 6 位' }, 400);
+          if (siteClosed && !u.isDeveloper) return json({ error: CLOSED_MSG, closed: true }, 403);
           const csalt = hex(crypto.getRandomValues(new Uint8Array(8)));
           u.salt = csalt;
           u.pass = await hashPass(pass, csalt);
@@ -124,6 +149,7 @@ export default {
         }
         if (await hashPass(pass, u.salt) !== u.pass) return json({ error: '密码错误！' }, 400);
         if (u.banned) return json({ error: 'banned' }, 403);
+        if (siteClosed && !u.isDeveloper) return json({ error: CLOSED_MSG, closed: true }, 403);
         u.lastLogin = Date.now();
         let uo = { ...u, _name: name };
         try {
@@ -133,6 +159,13 @@ export default {
         } catch (e) {}
         return json({ token: await issueToken(env, name), user: pubUser(uo) });
       } catch (e) { return json({ error: 'SRV ' + (e.message || String(e)) + ' :: ' + String(e.stack || '').slice(0, 400) }, 500); }
+    }
+
+    if (siteClosed && me && !me.isDeveloper) {
+      return json({ error: CLOSED_MSG, closed: true }, 403);
+    }
+    if (siteClosed && !me) {
+      return json({ error: CLOSED_MSG, closed: true }, 403);
     }
 
     if (!me) {
@@ -291,7 +324,7 @@ export default {
         const online = await presenceList(env);
         const users = Object.keys(db).map((k) => pubUser({ ...db[k], _name: k, _online: online.includes(k) }))
           .sort((a, b) => b.score - a.score);
-        return json({ users });
+        return json({ users, closed: siteClosed });
       }
       if (request.method !== 'POST') return json({ error: 'not found' }, 404);
 
@@ -363,15 +396,36 @@ export default {
         return r.__err ? json({ error: r.__err }, 400) : json(r);
       }
       if (path === '/api/admin/score') {
+        const d = clampDelta(body.delta);
         const r = await mutate((db, n, u) => {
-          const d = Math.max(-500, Math.min(500, body.delta | 0));
-          if (body.zero) { Object.keys(db).forEach((k) => { if (!isDev(db[k])) db[k].score = 0; }); return { ok: true }; }
-          if (body.all) { Object.keys(db).forEach((k) => { const x = db[k]; if (!isDev(x)) x.score = Math.max(0, (x.score || 0) + d); }); return { ok: true }; }
-          if (!canTouch(u)) throw new Error('无权操作该账号');
-          u.score = Math.max(0, (u.score || 0) + d);
-          return { ok: true, score: u.score };
+          const apply = (x) => { x.score = Math.max(0, (x.score || 0) + d); };
+          if (body.zero) { Object.keys(db).forEach((k) => { db[k].score = 0; }); return { ok: true, all: true, zero: true }; }
+          if (body.all) { Object.keys(db).forEach((k) => apply(db[k])); return { ok: true, all: true, delta: d }; }
+          if (!u) throw new Error('这个玩家不存在');
+          apply(u);
+          return { ok: true, score: u.score, name: n, delta: d };
         });
+        if (!r.__err) await grantToDO(env, { all: !!(body.all || body.zero), zero: !!body.zero, name: uname, scoreDelta: body.zero ? 0 : d, arrowsDelta: 0 });
         return r.__err ? json({ error: r.__err }, 400) : json(r);
+      }
+      if (path === '/api/admin/arrows') {
+        const d = clampDelta(body.delta);
+        const r = await mutate((db, n, u) => {
+          const apply = (x) => { x.arrows = Math.max(0, (x.arrows === undefined ? 100 : (x.arrows | 0)) + d); };
+          if (body.zero) { Object.keys(db).forEach((k) => { db[k].arrows = 0; }); return { ok: true, all: true, zero: true }; }
+          if (body.all) { Object.keys(db).forEach((k) => apply(db[k])); return { ok: true, all: true, delta: d }; }
+          if (!u) throw new Error('这个玩家不存在');
+          apply(u);
+          return { ok: true, arrows: u.arrows, name: n, delta: d };
+        });
+        if (!r.__err) await grantToDO(env, { all: !!(body.all || body.zero), zeroArrows: !!body.zero, name: uname, scoreDelta: 0, arrowsDelta: body.zero ? 0 : d });
+        return r.__err ? json({ error: r.__err }, 400) : json(r);
+      }
+      if (path === '/api/admin/site') {
+        if (!me.isDeveloper) return json({ error: '只有开发者能关闭或开启网站' }, 403);
+        const on = body.closed !== false;
+        await setSiteClosed(env, on);
+        return json({ ok: true, closed: on });
       }
       return json({ error: 'not found' }, 404);
     }
