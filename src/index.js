@@ -398,10 +398,11 @@ export default {
       if (path === '/api/admin/score') {
         const d = clampDelta(body.delta);
         const r = await mutate((db, n, u) => {
-          const apply = (x) => { x.score = Math.max(0, (x.score || 0) + d); };
-          if (body.zero) { Object.keys(db).forEach((k) => { db[k].score = 0; }); return { ok: true, all: true, zero: true }; }
+          const apply = (x) => { if (x.isDeveloper) return; x.score = Math.max(0, (x.score || 0) + d); };
+          if (body.zero) { Object.keys(db).forEach((k) => { if (!db[k].isDeveloper) db[k].score = 0; }); return { ok: true, all: true, zero: true }; }
           if (body.all) { Object.keys(db).forEach((k) => apply(db[k])); return { ok: true, all: true, delta: d }; }
           if (!u) throw new Error('这个玩家不存在');
+          if (u.isDeveloper) return { ok: true, score: u.score, name: n, delta: 0, infinite: true };
           apply(u);
           return { ok: true, score: u.score, name: n, delta: d };
         });
@@ -411,10 +412,11 @@ export default {
       if (path === '/api/admin/arrows') {
         const d = clampDelta(body.delta);
         const r = await mutate((db, n, u) => {
-          const apply = (x) => { x.arrows = Math.max(0, (x.arrows === undefined ? 100 : (x.arrows | 0)) + d); };
-          if (body.zero) { Object.keys(db).forEach((k) => { db[k].arrows = 0; }); return { ok: true, all: true, zero: true }; }
+          const apply = (x) => { if (x.isDeveloper) return; x.arrows = Math.max(0, (x.arrows === undefined ? 100 : (x.arrows | 0)) + d); };
+          if (body.zero) { Object.keys(db).forEach((k) => { if (!db[k].isDeveloper) db[k].arrows = 0; }); return { ok: true, all: true, zero: true }; }
           if (body.all) { Object.keys(db).forEach((k) => apply(db[k])); return { ok: true, all: true, delta: d }; }
           if (!u) throw new Error('这个玩家不存在');
+          if (u.isDeveloper) return { ok: true, arrows: u.arrows, name: n, delta: 0, infinite: true };
           apply(u);
           return { ok: true, arrows: u.arrows, name: n, delta: d };
         });
