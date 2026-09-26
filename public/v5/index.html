@@ -205,7 +205,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
         var warn = document.getElementById('net-warn');
         if(location.protocol === 'file:' || typeof fetch === 'undefined'){
           warn.style.display = 'block';
-          warn.innerHTML = '⚠ 中心服务器版：请先运行 <b>node server.js</b>，再用浏览器打开 <b>http://localhost:3000</b><br>不能直接双击 html 文件（file:// 无法连接服务器）';
+          warn.innerHTML = '⚠ 中心服务器版：用浏览器打开 <b>http://game.xiaopi.ink/</b><br>不能直接双击 html 文件（file:// 无法连接服务器）';
         }
         var st = document.querySelector('#screen-login .subtitle');
         if(st){ var v = document.createElement('div'); v.style.cssText = 'font-size:10px;color:#888;margin-top:2px'; v.textContent = APP_VERSION + ' · 中心服务器版'; st.parentNode.insertBefore(v, st.nextSibling); }
@@ -216,7 +216,8 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <input data-page-node-id="2b6u8pyL31PWbRlbOiVRJe" class="mc-input" id="li-pass" maxlength="32" placeholder="密码" type="password">
     <button data-page-node-id="qcLRFSATD4qY7OlJAEASlI" class="mc-btn" id="btn-login"><!--pnid:Usubyx11vlFZUKfrdQDv3V-->登 录</button>
     <button data-page-node-id="Japmr1pfIs9VdICTomRmx1" class="mc-btn small" id="btn-to-register"><!--pnid:X3ROgORqS0aE23mhrANZXy-->没有账号？点此注册</button>
-    <div data-page-node-id="eWlYuZneJuUU1UeDRPCkBs" class="note"><!--pnid:PACJGbuFVWbs3Z5GMQ5Tmc-->玩家被固定在原地，只有手脚能动 ——<br data-page-node-id="BYVKweNigghney32DcnG08"><!--pnid:L1DjEU44z7AlkXhFedzTRc-->轻点快射、按住蓄力，射中标靶！</div>
+    <div data-page-node-id="eWlYuZneJuUU1UeDRPCkBs" class="note"><!--pnid:PACJGbuFVWbs3Z5GMQ5Tmc-->Q
+      qq群：590060958——<br data-page-node-id="BYVKweNigghney32DcnG08"><!--pnid:L1DjEU44z7AlkXhFedzTRc-->轻点快射、按住蓄力，射中标靶！</div>
   
   </div>
 </div>
@@ -268,7 +269,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <h1 data-page-node-id="a1t7Kv0BTiARdcQbk399K3" class="game-title" style="font-size:24px"><!--pnid:IInNdA0vJVZFiiRV3UsRCQ-->玩 家 管 理</h1>
     <div data-page-node-id="cYOngCsenWSpLDfv31rD0A" class="note" id="admin-store"><!--pnid:MmtZuC9XO5wu8aySwifixO-->已注册玩家：0 人</div>
     <div data-page-node-id="666SSr1J1b66LhKIQlaH4M" class="note" style="color:#9bc8ff"><!--pnid:Ug3XFAGnRMvBWHG529m8uQ-->实时监控：任何玩家注册 / 登录 / 得分变化，这里都会<b data-page-node-id="a5ihcYpLuiAKYlnJKxhF8I" style="color:#7ee37e"><!--pnid:EUfSStsuI94ZDNQ1v59owb-->自动更新</b><!--pnid:jN501T7qHUH0PsF3RoMIcg-->，不用刷新（需在同一个浏览器里打开本文件）</div>
-    <div data-page-node-id="0fM5yxarmnQoqOMkKG35WN" class="note"><!--pnid:vTxLNoTc6bHPXHlTbizmHa-->管理员：为啥全部姓名都在 ｜ 可加分 / 减分 / 封禁（封禁后登录直接闪退）/ 删除 ｜ <b data-page-node-id="YI5icRKjXE01C16Iev8ni8" style="color:#ffd83d"><!--pnid:6mIZKW1oyKwSvjBnjh5j0H-->任命/取消管理员只有超级管理员可用</b></div>
+    <div data-page-node-id="0fM5yxarmnQoqOMkKG35WN" class="note"><!--pnid:vTxLNoTc6bHPXHlTbizmHa-->管理员：为啥全部姓名都在 ｜ 可加分 / 减分 / 封禁（封禁后登录直接闪退）/ 删除 ｜ <b data-page-node-id="YI5icRKjXE01C16Iev8ni8" style="color:#ffd83d"><!--pnid:6mIZKW1oyKwSvjBnjh5j0H-->任命/取消管理员只能开发者可用</b></div>
     <div data-page-node-id="8IH0HbyZrqN4IeV3UxRnEg" class="row" id="appoint-row" style="width:100%; justify-content:flex-start">
       <input data-page-node-id="YdZs4K4JQD50P100h0zGzG" autocomplete="off" class="mc-input" id="appoint-name" maxlength="16" placeholder="输入玩家名称" style="flex:1; min-width:140px">
       <button data-page-node-id="PF83lBrL22sMtILNhMlpJg" class="mc-btn small green" id="btn-appoint" style="min-width:110px"><!--pnid:0Z4thrYZHD2fyvkTk7q1vP-->设为管理员</button>
@@ -350,13 +351,13 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
 <!--pnid:y8Z4Hb9UHIycF3udWcQzgY--><!-- ================= 崩溃（闪退） ================= -->
 <div data-page-node-id="oEWJEwGfDm8BNufhTR9uX7" class="screen" id="screen-crash">
   <div data-page-node-id="aVAYtbdietIMb3iETjhqmk" class="crash-box">
-    <h2 data-page-node-id="lzwhpwHDh1aVdAVXHnfqCy"><!--pnid:hXrsVvT5gCu5G8dWCR0Sk1-->方块弓箭大师 已崩溃！</h2>
-    <div data-page-node-id="RJEVuhKOogMM5x9lyauit5"><!--pnid:sbZOxDSoj2AzyELvsOxiZu-->游戏运行中发生了错误，不幸的是它已经停止运行。</div>
+    <h2 data-page-node-id="lzwhpwHDh1aVdAVXHnfqCy"><!--pnid:hXrsVvT5gCu5G8dWCR0Sk1-->系统检测到您作弊</h2>
+    <div data-page-node-id="RJEVuhKOogMM5x9lyauit5"><!--pnid:sbZOxDSoj2AzyELvsOxiZu-->已被封禁</div>
     <div data-page-node-id="UlD8rUHYzmjRm8tU2YIN6V" class="mono"><!--pnid:XgRrjAjX2UASHzQHLjtysh-->Exit code: -805306369</div>
-    <div data-page-node-id="KEy5LiEF8h5fLfts1Kx6Sd" class="r"><!--pnid:Om4T9pOUNt7kny6Vs2wGXp-->致命错误：<span data-page-node-id="bHX3HKrantFfL96uWaXSJT" id="crash-reason"><!--pnid:TIyn5M8RJN7FnHy9p0c7wK-->unknown_exception</span></div>
+    <div data-page-node-id="KEy5LiEF8h5fLfts1Kx6Sd" class="r"><!--pnid:Om4T9pOUNt7kny6Vs2wGXp-QQ群：590060958<span data-page-node-id="bHX3HKrantFfL96uWaXSJT" id="crash-reason"><!--pnid:TIyn5M8RJN7FnHy9p0c7wK-->unknown_exception</span></div>
     <div data-page-node-id="lsg4DmZncRZijtNXsCfeBB" class="mono" style="font-size:13px; color:#888"><!--pnid:5Ka7zCIvVB0k6QsuEy1SGH--># Player attempted to enter the world... DENIED</div>
     <div data-page-node-id="OkKLkWBAY7KlnAgDWswT3Z" class="mono" style="font-size:13px; color:#888"><!--pnid:Bblo7ZQL2uVF5E08V8L4js--># at mcBow.World.checkPermission(World.java:805)</div>
-    <div data-page-node-id="OCMbrTuZkKCqa3rTtKuXru" style="margin-top:14px; color:#bbb"><!--pnid:te1O6aWRdifWSPxE4HD9f3-->即将自动重新启动游戏…</div>
+    <div data-page-node-id="OCMbrTuZkKCqa3rTtKuXru" style="margin-top:14px; color:#bbb"><!--pnid:te1O6aWRdifWSPxE4HD9f3-->前往qq群申诉</div>
   </div>
 </div>
 
