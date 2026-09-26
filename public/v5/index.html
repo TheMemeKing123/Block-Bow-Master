@@ -133,7 +133,7 @@ input{user-select:text;-webkit-user-select:text}
 .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;
   background:rgba(0,0,0,.55);pointer-events:auto;z-index:10}
 .overlay.show{display:flex}
-/* 多人等待加入: 背景透传点击(房主可边等边练习), 面板按钮仍可点 */
+/* 多人等待加入: 房主边等边练习, 面板按钮仍可点 */
 #wait-overlay{pointer-events:none;background:rgba(0,0,0,.25)}
 #wait-overlay > *{pointer-events:auto}
 .overlay h2{text-shadow:2px 2px 0 #000}
@@ -208,7 +208,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
         var warn = document.getElementById('net-warn');
         if(location.protocol === 'file:' || typeof fetch === 'undefined'){
           warn.style.display = 'block';
-          warn.innerHTML = '⚠ 中心服务器版：请先运行 <b>node server.js</b>，再用浏览器打开 <b>http://localhost:3000</b><br>不能直接双击 html 文件（file:// 无法连接服务器）';
+          warn.innerHTML = '⚠ 中心服务器版：请先运行 <b>node server.js</b>，再用浏览器打开 <b>http://game.xiaopi.ink/</b><br>不能直接双击 html 文件（file:// 无法连接服务器）';
         }
         var st = document.querySelector('#screen-login .subtitle');
         if(st){ var v = document.createElement('div'); v.style.cssText = 'font-size:10px;color:#888;margin-top:2px'; v.textContent = APP_VERSION + ' · 中心服务器版'; st.parentNode.insertBefore(v, st.nextSibling); }
@@ -219,7 +219,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <input data-page-node-id="2b6u8pyL31PWbRlbOiVRJe" class="mc-input" id="li-pass" maxlength="32" placeholder="密码" type="password">
     <button data-page-node-id="qcLRFSATD4qY7OlJAEASlI" class="mc-btn" id="btn-login"><!--pnid:Usubyx11vlFZUKfrdQDv3V-->登 录</button>
     <button data-page-node-id="Japmr1pfIs9VdICTomRmx1" class="mc-btn small" id="btn-to-register"><!--pnid:X3ROgORqS0aE23mhrANZXy-->没有账号？点此注册</button>
-    <div data-page-node-id="eWlYuZneJuUU1UeDRPCkBs" class="note"><!--pnid:PACJGbuFVWbs3Z5GMQ5Tmc-->玩家被固定在原地，只有手脚能动 ——<br data-page-node-id="BYVKweNigghney32DcnG08"><!--pnid:L1DjEU44z7AlkXhFedzTRc-->轻点快射、按住蓄力，射中标靶！</div>
+    <div data-page-node-id="eWlYuZneJuUU1UeDRPCkBs" class="note"><!--pnid:PACJGbuFVWbs3Z5GMQ5Tmc-->qq群590060958 ——<br data-page-node-id="BYVKweNigghney32DcnG08"><!--pnid:L1DjEU44z7AlkXhFedzTRc-->轻点快射、按住蓄力，射中标靶！</div>
   </div>
 </div>
 
@@ -228,11 +228,11 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
   <div data-page-node-id="Txc6HeZE9Eb80Gs9VBhid4" class="mc-panel">
     <h1 data-page-node-id="ISRFO1Py6N80Rn67Ddib8D" class="game-title" style="font-size:26px"><!--pnid:ELB0ZxrMX38gu0rxu297qz-->注 册 新 玩 家</h1>
     <input data-page-node-id="RrGiXuBqUsUrBXySifvjiq" autocomplete="off" class="mc-input" id="rg-name" maxlength="16" placeholder="姓名 / 账号（登录用）">
-    <input data-page-node-id="HDXZkdYnwADv1aMlj54gY8" class="mc-input" id="rg-pass" maxlength="32" placeholder="密码（至少3位）" type="password">
+    <input data-page-node-id="HDXZkdYnwADv1aMlj54gY8" class="mc-input" id="rg-pass" maxlength="32" placeholder="密码（至少6位）" type="password">
     <input data-page-node-id="9kWLGzwL2twkHiNaewJsPE" class="mc-input" id="rg-pass2" maxlength="32" placeholder="确认密码" type="password">
     <button data-page-node-id="EZYq2wt87FTGexYEgvqLzH" class="mc-btn green" id="btn-register"><!--pnid:Ldr2zg43SDxWVgh4FxpT4z-->创 建 账 号</button>
     <button data-page-node-id="B9xDCSjXOqO9f8dO1LkmLw" class="mc-btn small" id="btn-back-login"><!--pnid:yAVvXZ2ZD5mCKb8WLCIpyP-->返回登录</button>
-    <div data-page-node-id="nuPQtqGF8HQ80EVehCWYd9" class="note"><!--pnid:JfWlcajfeCHkLSOX6JAbQ6-->账号数据保存在本机浏览器中</div>
+    <div data-page-node-id="nuPQtqGF8HQ80EVehCWYd9" class="note"><!--pnid:JfWlcajfeCHkLSOX6JAbQ6-->账号数据保存在服务器中</div>
   </div>
 </div>
 
