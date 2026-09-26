@@ -133,9 +133,9 @@ export class RoomDO {
       if (!this.db[b.name]) { try { await this.syncUsersFromKV(b.name); } catch (e) {} }
       const u = this.db[b.name];
       if (!u) return new Response(JSON.stringify({ error: '账号不存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      u.arrows = Math.max(0, (u.arrows || 0) - 1);
-      await this.persistDb();
-      return new Response(JSON.stringify({ arrows: u.arrows }), { headers: { 'Content-Type': 'application/json' } });
+      /* 开发者箭矢无限, 不扣减 */
+      if (!u.isDeveloper) { u.arrows = Math.max(0, (u.arrows || 0) - 1); await this.persistDb(); }
+      return new Response(JSON.stringify({ arrows: u.arrows, infinite: !!u.isDeveloper }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/user-score') {
       await this.ensure();
@@ -199,8 +199,11 @@ export class RoomDO {
       if (!uf || !ut) return new Response(JSON.stringify({ error: '对方账号不存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       const fl = uf.friends || [];
       if (!fl.includes(to)) return new Response(JSON.stringify({ error: '只能赠送给好友' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      if ((uf.arrows|0) < cnt) return new Response(JSON.stringify({ error: '箭矢不足' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      uf.arrows = (uf.arrows|0) - cnt;
+      /* 开发者箭矢无限, 赠送不扣减 */
+      if (!uf.isDeveloper) {
+        if ((uf.arrows|0) < cnt) return new Response(JSON.stringify({ error: '箭矢不足' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        uf.arrows = (uf.arrows|0) - cnt;
+      }
       ut.arrows = (ut.arrows|0) + cnt;
       const now = Date.now();
       const text = '🎁 送了你 ' + cnt + ' 支箭';
@@ -220,11 +223,14 @@ export class RoomDO {
       const count = Math.floor(b.count | 0);
       if (count < 1 || count > 10000) return new Response(JSON.stringify({ error: '数量无效' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       const cost = count;
-      if ((u.score || 0) < cost) return new Response(JSON.stringify({ error: '积分不足' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      u.score -= cost;
+      /* 开发者积分无限, 购买不扣分 */
+      if (!u.isDeveloper) {
+        if ((u.score || 0) < cost) return new Response(JSON.stringify({ error: '积分不足' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        u.score -= cost;
+      }
       u.arrows = (u.arrows || 0) + count;
       await this.persistDb();
-      return new Response(JSON.stringify({ score: u.score, arrows: u.arrows }), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ score: u.score, arrows: u.arrows, infinite: !!u.isDeveloper }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/audit-ev' && request.method === 'POST') {
       await this.ensure();
@@ -308,6 +314,7 @@ export class RoomDO {
       const arrowsDelta = Number.isFinite(b.arrowsDelta) ? (b.arrowsDelta | 0) : 0;
       const applyOne = (u) => {
         if (!u) return;
+        if (u.isDeveloper) return;   // 开发者资源无限, 不接受增减/清零
         if (b.zero) u.score = 0;
         else if (scoreDelta) u.score = Math.max(0, (u.score || 0) + scoreDelta);
         if (b.zeroArrows) u.arrows = 0;
