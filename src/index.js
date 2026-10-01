@@ -12,7 +12,8 @@ function json(data, code = 200) {
     headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
   });
 }
-const CLOSED_MSG = '网站已关闭，请过一会儿再来';
+const CLOSED_MSG = '已下线，不能使用';
+function isStaff(u) { return !!(u && (u.isDeveloper || u.isAdmin)); }
 async function isSiteClosed(env) {
   try { return (await env.BOW_KV.get('site_closed')) === '1'; } catch (e) { return false; }
 }
@@ -80,7 +81,7 @@ export default {
     }
     const siteClosed = await isSiteClosed(env);
     if (path === '/api/skin/get' && request.method === 'GET') {
-      if (siteClosed && !(me && me.isDeveloper)) return json({ error: CLOSED_MSG, closed: true }, 403);
+      if (siteClosed && !isStaff(me)) return json({ error: CLOSED_MSG, closed: true }, 403);
       const nm = String(url.searchParams.get('name') || '').slice(0, 16);
       const db = await getDb(env);
       const u = db[nm];
@@ -140,7 +141,7 @@ export default {
         /* 自动建档账号(无密码)首次登录即认领: 设置密码 */
         if (!u.salt && !u.pass) {
           if (pass.length < 6) return json({ error: '密码至少 6 位' }, 400);
-          if (siteClosed && !u.isDeveloper) return json({ error: CLOSED_MSG, closed: true }, 403);
+          if (siteClosed && !isStaff(u)) return json({ error: CLOSED_MSG, closed: true }, 403);
           const csalt = hex(crypto.getRandomValues(new Uint8Array(8)));
           u.salt = csalt;
           u.pass = await hashPass(pass, csalt);
@@ -149,7 +150,7 @@ export default {
         }
         if (await hashPass(pass, u.salt) !== u.pass) return json({ error: '密码错误！' }, 400);
         if (u.banned) return json({ error: 'banned' }, 403);
-        if (siteClosed && !u.isDeveloper) return json({ error: CLOSED_MSG, closed: true }, 403);
+        if (siteClosed && !isStaff(u)) return json({ error: CLOSED_MSG, closed: true }, 403);
         u.lastLogin = Date.now();
         let uo = { ...u, _name: name };
         try {
@@ -161,7 +162,7 @@ export default {
       } catch (e) { return json({ error: 'SRV ' + (e.message || String(e)) + ' :: ' + String(e.stack || '').slice(0, 400) }, 500); }
     }
 
-    if (siteClosed && me && !me.isDeveloper) {
+    if (siteClosed && me && !isStaff(me)) {
       return json({ error: CLOSED_MSG, closed: true }, 403);
     }
     if (siteClosed && !me) {
@@ -424,7 +425,7 @@ export default {
         return r.__err ? json({ error: r.__err }, 400) : json(r);
       }
       if (path === '/api/admin/site') {
-        if (!me.isDeveloper) return json({ error: '只有开发者能关闭或开启网站' }, 403);
+        if (!isStaff(me)) return json({ error: '只有开发者和管理员能下线或上线' }, 403);
         const on = body.closed !== false;
         await setSiteClosed(env, on);
         return json({ ok: true, closed: on });

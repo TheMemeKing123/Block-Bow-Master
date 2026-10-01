@@ -304,7 +304,7 @@ export class RoomDO {
       const b = await request.json().catch(() => ({}));
       this.siteClosed = !!b.closed;
       try { await this.state.storage.put('site_closed', this.siteClosed ? '1' : '0'); } catch (e) {}
-      if (this.siteClosed) this.kickNonDevelopers();
+      if (this.siteClosed) this.kickNonStaff();
       return new Response(JSON.stringify({ ok: true, closed: this.siteClosed }), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.pathname === '/admin-grant' && request.method === 'POST') {
@@ -343,7 +343,7 @@ export class RoomDO {
       const user = await userFromToken(this.env, u.searchParams.get('token'));
       if (!user) return new Response('unauthorized', { status: 401 });
       await this.ensure();
-      if (this.siteClosed && !user.isDeveloper) return new Response('网站已关闭，请过一会儿再来', { status: 403 });
+      if (this.siteClosed && !(user.isDeveloper || user.isAdmin)) return new Response('已下线，不能使用', { status: 403 });
       const name = user.name;
       const pair = new WebSocketPair();
       this.online.set(name, pair[1]);
@@ -460,11 +460,11 @@ export class RoomDO {
     }
   }
 
-  kickNonDevelopers() {
-    const msg = JSON.stringify({ t: 'site-closed', reason: '网站已关闭，请过一会儿再来' });
+  kickNonStaff() {
+    const msg = JSON.stringify({ t: 'site-closed', reason: '已下线，不能使用' });
     for (const [name, ws] of [...this.online.entries()]) {
       const u = this.db && this.db[name];
-      if (u && u.isDeveloper) continue;
+      if (u && (u.isDeveloper || u.isAdmin)) continue;
       try { ws.send(msg); } catch (e) {}
       try { ws.close(4003, 'site-closed'); } catch (e) {}
     }

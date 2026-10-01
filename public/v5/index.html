@@ -188,10 +188,19 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
 
 
 <div class="screen dirt" id="screen-closed" style="z-index:960">
-  <div class="mc-panel">
-    <h1 class="game-title" style="font-size:26px">网站已关闭</h1>
-    <div class="note" style="color:#ffe08a;font-size:16px;padding:8px 0">请过一会儿再来</div>
-    <button class="mc-btn small" id="btn-closed-dev">开发者登录</button>
+  <button class="mc-btn small" id="btn-closed-admin" style="position:absolute;top:16px;right:16px;z-index:3;min-width:auto;padding:8px 14px">管理员登录</button>
+  <div class="mc-panel" id="closed-info">
+    <h1 class="game-title" style="font-size:26px">已下线</h1>
+    <div class="note" style="color:#ffe08a;font-size:16px;padding:8px 0">不能用</div>
+    <div class="note" style="color:#9fd4ff;font-size:15px">交流群：590060958</div>
+  </div>
+  <div class="mc-panel" id="closed-login" style="display:none">
+    <h1 class="game-title" style="font-size:22px">管理员登录</h1>
+    <input class="mc-input" id="cl-name" maxlength="16" placeholder="管理员账号" autocomplete="off">
+    <input class="mc-input" id="cl-pass" maxlength="32" placeholder="密码" type="password">
+    <button class="mc-btn" id="btn-closed-login">登 录</button>
+    <button class="mc-btn small" id="btn-closed-login-back">返回</button>
+    <div class="note">仅管理员 / 开发者账号可登录</div>
   </div>
 </div>
 
@@ -270,7 +279,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <h1 data-page-node-id="a1t7Kv0BTiARdcQbk399K3" class="game-title" style="font-size:24px"><!--pnid:IInNdA0vJVZFiiRV3UsRCQ-->玩 家 管 理</h1>
     <div data-page-node-id="cYOngCsenWSpLDfv31rD0A" class="note" id="admin-store"><!--pnid:MmtZuC9XO5wu8aySwifixO-->已注册玩家：0 人</div>
     <div data-page-node-id="666SSr1J1b66LhKIQlaH4M" class="note" style="color:#9bc8ff"><!--pnid:Ug3XFAGnRMvBWHG529m8uQ-->实时监控：任何玩家注册 / 登录 / 得分变化，这里都会<b data-page-node-id="a5ihcYpLuiAKYlnJKxhF8I" style="color:#7ee37e"><!--pnid:EUfSStsuI94ZDNQ1v59owb-->自动更新</b><!--pnid:jN501T7qHUH0PsF3RoMIcg-->，不用刷新（需在同一个浏览器里打开本文件）</div>
-    <div data-page-node-id="0fM5yxarmnQoqOMkKG35WN" class="note"><!--pnid:vTxLNoTc6bHPXHlTbizmHa-->管理员 / 开发者：全体或指定玩家加减积分与攻击，数额自定义 ｜ 开发者可关闭网站</div>
+     <div data-page-node-id="0fM5yxarmnQoqOMkKG35WN" class="note"><!--pnid:vTxLNoTc6bHPXHlTbizmHa-->管理员 / 开发者：全体或指定玩家加减积分与攻击，数额自定义 ｜ 开发者和管理员可下线网站</div>
     <div data-page-node-id="8IH0HbyZrqN4IeV3UxRnEg" class="row" id="appoint-row" style="width:100%; justify-content:flex-start">
       <input data-page-node-id="YdZs4K4JQD50P100h0zGzG" autocomplete="off" class="mc-input" id="appoint-name" maxlength="16" placeholder="输入玩家名称" style="flex:1; min-width:140px">
       <button data-page-node-id="PF83lBrL22sMtILNhMlpJg" class="mc-btn small green" id="btn-appoint" style="min-width:110px"><!--pnid:0Z4thrYZHD2fyvkTk7q1vP-->设为管理员</button>
@@ -289,8 +298,8 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
       <button class="mc-btn small" id="btn-all-sub-arrow" style="min-width:110px">全体减攻击</button>
     </div>
     <div class="row" id="site-row" style="width:100%; justify-content:flex-start; display:none; align-items:center">
-      <button class="mc-btn small danger" id="btn-site-close" style="min-width:110px">关闭网站</button>
-      <button class="mc-btn small green" id="btn-site-open" style="min-width:110px">开启网站</button>
+      <button class="mc-btn small danger" id="btn-site-close" style="min-width:110px">下线</button>
+      <button class="mc-btn small green" id="btn-site-open" style="min-width:110px">上线</button>
       <span class="note" id="site-state">网站状态：开放</span>
     </div>
     <div data-page-node-id="u2P7LpPPndRqgnY9lkahDe" id="admin-list"></div>
@@ -562,15 +571,19 @@ async function api(path, opts = {}) {
     if (curScreen !== 'screen-login' && curScreen !== 'screen-register' && curScreen !== 'screen-game') show('screen-login');
   }
   if (!res.ok) {
-    if (data && data.closed) { showClosed(); throw new Error(data.error || '网站已关闭，请过一会儿再来'); }
+    if (data && data.closed) { showClosed(); throw new Error(data.error || '已下线，不能使用'); }
     throw new Error(data.error || ('请求失败 ' + res.status));
   }
   return data;
 }
 function showClosed(){
   try{ AUTH.token = null; AUTH.user = null; }catch(e){}
+  const info = $('closed-info'), login = $('closed-login');
+  if(info) info.style.display = '';
+  if(login) login.style.display = 'none';
   show('screen-closed');
 }
+function isStaffUser(u){ return !!(u && (u.isDeveloper || u.isAdmin)); }
 function saveAuth(token, user){
   AUTH.token = token; AUTH.user = user;
   try{ sessionStorage.setItem(TOKEN_KEY_TAB, token); }catch(e){}
@@ -662,7 +675,7 @@ function tryLogin(){
     enterLobby(); sfx('ui');
   }).catch(e=>{
     if(e.message === 'banned') crash('您已被管理员移出这个世界 (player_banned)');
-    else if(String(e.message||'').indexOf('网站已关闭')>=0) showClosed();
+    else if(String(e.message||'').indexOf('已下线')>=0 || String(e.message||'').indexOf('网站已关闭')>=0) showClosed();
     else toast('登录失败：' + e.message, false);
   });
 }
@@ -680,7 +693,7 @@ function tryRegister(){
     saveAuth(d.token, d.user);
     enterLobby();
   }).catch(e=>{
-    if(String(e.message||'').indexOf('网站已关闭')>=0) showClosed();
+    if(String(e.message||'').indexOf('已下线')>=0 || String(e.message||'').indexOf('网站已关闭')>=0) showClosed();
     else toast('注册失败：' + e.message, false);
   });
 }
@@ -752,7 +765,7 @@ async function refreshUsers(){
     d.users.forEach(u=>{ USER_CACHE[u.username] = { score:u.score||0, arrows:u.arrows, banned:!!u.banned, isAdmin:!!u.isAdmin, isDeveloper:!!u.isDeveloper, reg:u.reg||0, lastLogin:u.lastLogin||0 }; });
     ONLINE_SET = new Set(d.users.filter(u=>u.online).map(u=>u.username));
     const st = $('site-state');
-    if(st) st.textContent = d.closed ? '网站状态：已关闭' : '网站状态：开放';
+    if(st) st.textContent = d.closed ? '网站状态：已下线' : '网站状态：开放';
     return d.users;
   }catch(e){ return null; }
 }
@@ -830,7 +843,7 @@ async function openAdmin(){
   clearInterval(adminTimer);
   if(!canManage()){ show('screen-lobby'); return; }
   $('appoint-row').style.display = isSuper() ? 'flex' : 'none';
-  const sr = $('site-row'); if(sr) sr.style.display = isSuper() ? 'flex' : 'none';
+  const sr = $('site-row'); if(sr) sr.style.display = canManage() ? 'flex' : 'none';
   renderAdmin();
   show('screen-admin');
   adminTimer = setInterval(()=>{
@@ -889,17 +902,53 @@ $('btn-all-clear').onclick = ()=>{
 $('btn-all-add-arrow').onclick = ()=>{ sfx('ui'); const d = grantAmt('grant-arrows'); adminOp('/api/admin/arrows', {all:true, delta:d}, '已给全部玩家各加 '+d+' 攻击'); };
 $('btn-all-sub-arrow').onclick = ()=>{ sfx('ui'); const d = grantAmt('grant-arrows'); adminOp('/api/admin/arrows', {all:true, delta:-d}, '已给全部玩家各减 '+d+' 攻击'); };
 $('btn-site-close').onclick = ()=>{
-  askConfirm('关闭网站后，只有开发者能进入。其他人会看到「网站已关闭，请过一会儿再来」。确定关闭？', ()=>{
-    adminOp('/api/admin/site', {closed:true}, '网站已关闭'); sfx('ui');
-    const st = $('site-state'); if(st) st.textContent = '网站状态：已关闭';
+  askConfirm('下线后普通玩家一进去就会显示已下线、不能用。只有开发者和管理员能登录。确定下线？', ()=>{
+    adminOp('/api/admin/site', {closed:true}, '已下线'); sfx('ui');
+    const st = $('site-state'); if(st) st.textContent = '网站状态：已下线';
   });
 };
 $('btn-site-open').onclick = ()=>{
-  adminOp('/api/admin/site', {closed:false}, '网站已开启'); sfx('ui');
+  adminOp('/api/admin/site', {closed:false}, '已上线'); sfx('ui');
   const st = $('site-state'); if(st) st.textContent = '网站状态：开放';
 };
-const bcd = $('btn-closed-dev');
-if(bcd) bcd.onclick = ()=>{ sfx('ui'); show('screen-login'); };
+function showClosedLogin(){
+  const info = $('closed-info'), login = $('closed-login');
+  if(info) info.style.display = 'none';
+  if(login) login.style.display = '';
+  const n = $('cl-name'); if(n) n.focus();
+}
+function hideClosedLogin(){
+  const info = $('closed-info'), login = $('closed-login');
+  if(info) info.style.display = '';
+  if(login) login.style.display = 'none';
+}
+function tryClosedLogin(){
+  audio();
+  const name = ($('cl-name').value||'').trim(), pass = $('cl-pass').value;
+  if(!name || !pass) return toast('请输入账号和密码', false);
+  toast('正在登录…');
+  api('/api/login', { method:'POST', body:{ username:name, password:pass }, skipAuth:true }).then(d=>{
+    if(!isStaffUser(d.user)){
+      toast('只能管理员账号登录', false);
+      return;
+    }
+    saveAuth(d.token, d.user);
+    enterLobby(); sfx('ui');
+  }).catch(e=>{
+    if(e.message === 'banned') crash('您已被管理员移出这个世界 (player_banned)');
+    else toast('登录失败：' + e.message, false);
+  });
+}
+const bca = $('btn-closed-admin');
+if(bca) bca.onclick = ()=>{ sfx('ui'); showClosedLogin(); };
+const bcl = $('btn-closed-login');
+if(bcl) bcl.onclick = tryClosedLogin;
+const bcb = $('btn-closed-login-back');
+if(bcb) bcb.onclick = ()=>{ sfx('ui'); hideClosedLogin(); };
+const clp = $('cl-pass');
+if(clp) clp.addEventListener('keydown', e=>{ if(e.key==='Enter') tryClosedLogin(); });
+const cln = $('cl-name');
+if(cln) cln.addEventListener('keydown', e=>{ if(e.key==='Enter') tryClosedLogin(); });
 bindShop();
   const bpt = $('btn-pause-touch');
   if(bpt) bpt.onclick = () => { sfx('ui'); $('pause-overlay').classList.toggle('show'); };
@@ -938,7 +987,11 @@ $('btn-logout').onclick = ()=>{
   try{ api('/api/logout', { method:'POST', skipAuth:true }); }catch(e){}
   try{ closeFriendWs(); }catch(e){}
   clearAuth(); clearSession();
-  show('screen-login'); sfx('ui'); toast('已退出登录');
+  sfx('ui'); toast('已退出登录');
+  fetch('/api/config').then(r=>r.json()).then(d=>{
+    if(d && d.config && d.config.closed) showClosed();
+    else show('screen-login');
+  }).catch(()=>show('screen-login'));
 };
 $('btn-solo').onclick = ()=>{ sfx('ui'); startGame('solo'); };
 $('btn-create').onclick = ()=>{ sfx('ui'); openRoomSetup(); };
@@ -2336,7 +2389,7 @@ function handleGameData(d){
           AUTH.user = m.user;
           setSession(m.user.username);
           USER_CACHE[m.user.username] = { score:m.user.score||0, arrows:m.user.arrows, banned:false, isAdmin:!!m.user.isAdmin, isDeveloper:!!m.user.isDeveloper, reg:m.user.reg||0, lastLogin:m.user.lastLogin||0 };
-          if(m.user && m.user.isDeveloper) enterLobby();
+          if(m.user && isStaffUser(m.user)) enterLobby();
           else showClosed();
         }).catch(()=>showClosed());
       } else showClosed();
@@ -2349,7 +2402,7 @@ function handleGameData(d){
         USER_CACHE[m.user.username] = { score:m.user.score||0, arrows:m.user.arrows, banned:false, isAdmin:!!m.user.isAdmin, isDeveloper:!!m.user.isDeveloper, reg:m.user.reg||0, lastLogin:m.user.lastLogin||0 };
         enterLobby();
       }).catch((e)=>{
-        if(e && String(e.message||'').indexOf('网站已关闭')>=0) showClosed();
+        if(e && (String(e.message||'').indexOf('已下线')>=0 || String(e.message||'').indexOf('网站已关闭')>=0)) showClosed();
         else show('screen-login');
       });
     } else show('screen-login');
