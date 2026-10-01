@@ -50,6 +50,9 @@ input{user-select:text;-webkit-user-select:text}
 .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .note{font-size:12px;color:#9a9a9a;text-shadow:1px 1px 0 #000;line-height:1.7;text-align:center}
 .divider{width:100%;height:2px;background:linear-gradient(90deg,transparent,#666,transparent);margin:4px 0}
+.site-links{position:absolute;bottom:10px;left:0;right:0;z-index:5;text-align:center;font-size:12px;color:#c8c8c8;line-height:1.8;text-shadow:1px 1px 0 #000}
+.site-links a{color:#7ee37e;text-decoration:underline;cursor:pointer}
+.site-links a:hover{color:#b6ffb6}
 
 /* toast */
 #toast{position:fixed;top:26px;left:50%;transform:translateX(-50%);z-index:999;
@@ -230,6 +233,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <button data-page-node-id="Japmr1pfIs9VdICTomRmx1" class="mc-btn small" id="btn-to-register"><!--pnid:X3ROgORqS0aE23mhrANZXy-->没有账号？点此注册</button>
     <div data-page-node-id="eWlYuZneJuUU1UeDRPCkBs" class="note"><!--pnid:PACJGbuFVWbs3Z5GMQ5Tmc-->qq群590060958 ——<br data-page-node-id="BYVKweNigghney32DcnG08"><!--pnid:L1DjEU44z7AlkXhFedzTRc-->轻点快射、按住蓄力，射中标靶！</div>
   </div>
+  <div class="site-links">友情链接：<a class="link-more-games" href="#" target="_blank" rel="noopener noreferrer">更多游戏</a></div>
 </div>
 
 <!--pnid:5HHUBnjm7BOaBNb6UyzOcs--><!-- ================= 注册 ================= -->
@@ -271,6 +275,7 @@ kbd{background:#222;border:1px solid #666;border-bottom-width:3px;border-radius:
     <button data-page-node-id="w92NPvcCCIiTiPmoERvyS9" class="mc-btn small" id="btn-friends"><!--pnid:qlguxhxNfLZ5NDprFb96nt-->好 友（<span data-page-node-id="GLYaUuowOWd5OESypbWMre" id="friend-cnt"><!--pnid:PB5vK3fZLZeyzgcmmwqRyz-->0</span><!--pnid:xXnIA0t7UjRjYSGHGmuEyK-->/200）</button>
     <button data-page-node-id="TjaveAqCuCZxCinNWcgBrs" class="mc-btn small danger" id="btn-logout"><!--pnid:Uk7UMmz5IntKvuNZZLCdWC-->退出登录</button>
   </div>
+  <div class="site-links">友情链接：<a class="link-more-games" href="#" target="_blank" rel="noopener noreferrer">更多游戏</a></div>
 </div>
 
 <!--pnid:H1sCdcJ99fa66WiBy2KM5y--><!-- ================= 管理员 ================= -->
@@ -546,6 +551,13 @@ function sfx(type){
 
 /* ---------- 账号系统 v4：中心服务器 + token（localStorage 只存 token） ---------- */
 const ADMIN_NAME = '为啥全部姓名都在';   // 服务器保留的开发者账号
+const MORE_GAMES_URL = '';   // 友情链接「更多游戏」网址，填上即可跳转
+function bindSiteLinks(){
+  document.querySelectorAll('.link-more-games').forEach(function(a){
+    if(MORE_GAMES_URL){ a.href = MORE_GAMES_URL; }
+    else { a.onclick = function(e){ e.preventDefault(); toast('“更多游戏”链接待配置', false); }; }
+  });
+}
 const TOKEN_KEY = 'mcBow_token_v4';
 const TOKEN_KEY_TAB = 'mcBow_token_tab';   // 每标签独立会话: 多标签可登录不同账号
 let AUTH = { token: (function(){ try{ return sessionStorage.getItem(TOKEN_KEY_TAB) || localStorage.getItem(TOKEN_KEY); }catch(e){ return null; } })(), user: null };
@@ -950,6 +962,7 @@ if(clp) clp.addEventListener('keydown', e=>{ if(e.key==='Enter') tryClosedLogin(
 const cln = $('cl-name');
 if(cln) cln.addEventListener('keydown', e=>{ if(e.key==='Enter') tryClosedLogin(); });
 bindShop();
+bindSiteLinks();
   const bpt = $('btn-pause-touch');
   if(bpt) bpt.onclick = () => { sfx('ui'); $('pause-overlay').classList.toggle('show'); };
   const bif = $('btn-invite-friend');
